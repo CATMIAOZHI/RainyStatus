@@ -1,0 +1,12 @@
+# 云端本地文件
+node_modules/
+dist/
+.wrangler/
+
+# 本地 secret（含真实 AUTH_TOKEN），绝不提交
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example

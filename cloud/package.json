@@ -1,0 +1,15 @@
+{
+  "name": "rainystatus-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RainyStatus 云端：Cloudflare Worker（状态网页 + 心跳 API）",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "dry-run": "wrangler deploy --dry-run --outdir=dist",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.143.0"
+  }
+}

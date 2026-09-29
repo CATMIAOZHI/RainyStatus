@@ -1,0 +1,63 @@
+{
+  // ═══════════════════════════════════════════════════════
+  // RainyStatus 云端 Worker 配置
+  //
+  // 一键部署（Deploy to Cloudflare）会自动创建 KV namespace 并把
+  // id 回填到这里。手动部署请先执行：
+  //   npx wrangler kv namespace create STATUS_KV
+  // 然后把输出的 id 填到下面的 kv_namespaces[0].id。
+  // ═══════════════════════════════════════════════════════
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "rainystatus",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+
+  // 默认暴露 *.workers.dev 子域（人人可用，不依赖自有域名）。
+  // 想绑定自己的域名，见本文件末尾注释与 cloud/README.md。
+  "workers_dev": true,
+
+  // 静态资源（网页）—— Cloudflare 官方：static assets 请求免费且不限量。
+  // 不设 run_worker_first（默认 false）→ 静态资源优先命中，
+  // 因此即使免费额度耗尽（错误码 1027）网页仍能打开，只有 /api/* 报错。
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "STATUS_KV",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // ── 站点可配置项：别人部署后改成自己的 ──
+  "vars": {
+    "SITE_TITLE": "RainyStatus",
+    "OWNER_NAME": "WaterRainCat",
+    "AVATAR_EMOJI": "☔",
+    "OFFLINE_THRESHOLD_MS": "1800000",
+    "NEXT_EXPECTED_MS": "600000",
+    "SHOW_TEMPERATURE": "false",
+    "SHOW_NETWORK": "false",
+    "SHOW_MOOD": "true",
+    "TIMEZONE_OFFSET_MINUTES": "480",
+    "DEFAULT_LANG": "zh-Hans"
+  },
+
+  // 不设 limits.cpu_ms：免费版上限就是 10ms，设更小会自杀、设更大无效
+  "observability": {
+    "enabled": true
+  }
+
+  // ── 绑定自有域名（可选）──
+  // 前提：该域名所在 zone 在本账号且 active，且该主机名没有已存在的 CNAME。
+  // Cloudflare 会自动创建 DNS 记录并签发证书（可能等 1–2 分钟）。
+  // 配好后把上面的 "workers_dev": true 改成 false（收敛扫描面）：
+  //
+  // "routes": [
+  //   { "pattern": "status.example.com", "custom_domain": true }
+  // ]
+}

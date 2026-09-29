@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex" />
+  <title>RainyStatus</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="card" id="card">
+    <header class="head">
+      <div class="avatar" id="avatar" aria-hidden="true">☔</div>
+      <div class="head-text">
+        <h1 id="title">RainyStatus</h1>
+        <p class="owner" id="owner"></p>
+      </div>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="zh-Hans" class="lang-btn">简</button>
+        <button type="button" data-lang="zh-Hant" class="lang-btn">繁</button>
+        <button type="button" data-lang="en" class="lang-btn">EN</button>
+      </div>
+    </header>
+
+    <section class="status" aria-live="polite">
+      <div class="status-badge" id="statusBadge">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">—</span>
+      </div>
+      <p class="status-detail" id="statusDetail"></p>
+    </section>
+
+    <section class="battery" id="batterySection">
+      <div class="battery-head">
+        <span class="battery-label" id="batteryLabel">🔋</span>
+        <span class="battery-value" id="batteryValue">—</span>
+      </div>
+      <div class="battery-bar" role="progressbar" id="batteryBar" aria-valuemin="0" aria-valuemax="100">
+        <div class="battery-fill" id="batteryFill"></div>
+      </div>
+      <p class="battery-sub" id="batterySub"></p>
+    </section>
+
+    <section class="mood" id="moodSection" hidden>
+      <h2 class="section-title" id="moodTitle">心情</h2>
+      <p class="mood-text"><span id="moodEmoji"></span><span id="moodText"></span></p>
+      <p class="mood-time" id="moodTime"></p>
+    </section>
+
+    <dl class="meta" id="metaSection">
+      <div class="meta-row" id="metaTempRow" hidden>
+        <dt id="metaTempLabel">温度</dt><dd id="metaTemp">—</dd>
+      </div>
+      <div class="meta-row" id="metaNetworkRow" hidden>
+        <dt id="metaNetworkLabel">网络</dt><dd id="metaNetwork">—</dd>
+      </div>
+      <div class="meta-row" id="metaDeviceRow" hidden>
+        <dt id="metaDeviceLabel">设备</dt><dd id="metaDevice">—</dd>
+      </div>
+      <div class="meta-row">
+        <dt id="metaLastSeenLabel">最后在线</dt><dd id="metaLastSeen">—</dd>
+      </div>
+    </dl>
+
+    <footer class="foot">
+      <p id="freshnessHint"></p>
+      <p class="foot-sub"><span id="refreshedAt"></span></p>
+    </footer>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

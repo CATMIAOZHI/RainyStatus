@@ -78,7 +78,10 @@ object ReportGate {
                 elapsedSince(input.lastSuccessAt, input.now) >=
                 (input.effectiveIntervalMs * PERIODIC_TOLERANCE).toLong()
 
-        ReportTrigger.UNLOCK ->
+        // 进程被系统杀掉后自动拉起：不能无条件放行（会被反复杀的后台环境当成免费写额度），
+        // 按 UNLOCK 规则——距上次成功够一个间隔才发
+        ReportTrigger.UNLOCK,
+        ReportTrigger.STICKY_RESTART ->
             elapsedSince(input.lastSuccessAt, input.now) >= input.effectiveIntervalMs
 
         ReportTrigger.NETWORK ->

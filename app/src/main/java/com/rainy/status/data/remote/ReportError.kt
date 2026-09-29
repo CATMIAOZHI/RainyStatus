@@ -27,13 +27,22 @@ sealed interface ReportError {
     /** 连不上 / 超时 / DNS 失败。退避重试 */
     data class Network(val message: String) : ReportError
 
+    /**
+     * 404：地址指向了本 Worker 之外的地方（路径不存在 / 地址填错 / 尚未部署）。
+     *
+     * **不重试**：路径是固定的（`/api/heartbeat`），404 说明 base URL 本身不对，
+     * 退避重试一万次也一样。归到 [Unknown] 会让它按「服务端故障」无限重试，
+     * 同时界面只显示「未知错误」——用户看不出真正要改的是地址。
+     */
+    data class EndpointNotFound(val message: String?) : ReportError
+
     /** 其他未分类（非 2xx 且不在上面枚举里）。按服务端故障对待，保守可重试 */
     data class Unknown(val httpCode: Int?, val message: String?) : ReportError
 
     /** 是否值得自动重试 */
     val retryable: Boolean
         get() = when (this) {
-            is Unauthorized, is Contract, PayloadTooLarge -> false
+            is Unauthorized, is Contract, PayloadTooLarge, is EndpointNotFound -> false
             is RateLimited, is Server, is Network, is Unknown -> true
         }
 }

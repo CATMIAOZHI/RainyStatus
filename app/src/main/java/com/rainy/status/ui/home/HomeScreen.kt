@@ -171,7 +171,8 @@ fun HomeScreen(
                         val url = viewModel.statusPageUrl()
                         if (url == null) showEndpointHint = true
                         else PermissionUtils.openUrl(context, url)
-                    }
+                    },
+                    reporting = state.reporting,
                 )
             }
 
@@ -300,16 +301,21 @@ private fun StatusCard(state: HomeUiState) {
 /**
  * 顶部状态摘要。
  *
- * 优先级：未配置 > Token 失效 > 降频 > 运行中。
- * 「Token 失效」排在降频前面：Token 错了上报永远不成功，用户必须先修它，
- * 此时提降频只会让人误判。
+ * 优先级：未配置 > Token 失效 > 其他上报失败 > 降频 > 运行中。
+ *
+ * 为什么必须有「其他上报失败」这一档：`lastErrorKind` 会被写入**所有**失败分类，
+ * 但以前只识别 `Unauthorized`，于是地址填错（404）、服务端 5xx、DNS 失败等情况下
+ * 首页仍显示绿色「正常」+ 一条早已过期的上次上报时间。
+ * 这个 App 的全部意义就是「让水晴知道手机还活着」，心跳停了却报绿色最伤信任。
  */
 @Composable
 private fun StateLine(state: HomeUiState) {
     val settings = state.settings
+    val errorKind = state.runtime.lastErrorKind
     val (dotColor, textRes) = when {
         !settings.configured -> StatusOrange to R.string.home_state_not_configured
-        state.runtime.lastErrorKind == "Unauthorized" -> StatusOrange to R.string.home_state_auth_error
+        errorKind == "Unauthorized" -> StatusOrange to R.string.home_state_auth_error
+        errorKind != null -> StatusOrange to R.string.home_state_report_error
         state.throttled -> StatusOrange to R.string.home_state_throttled
         settings.enabled -> StatusGreen to R.string.home_state_ok
         else -> StatusOrange to R.string.home_service_stopped
@@ -359,10 +365,13 @@ private fun InfoRow(label: String, value: String?) {
 private fun ActionRow(
     onReportNow: () -> Unit,
     onOpenStatusPage: () -> Unit,
+    reporting: Boolean,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(
             onClick = onReportNow,
+            // 防连点：MANUAL 绕过一切节流，连点等于真写多次 KV
+            enabled = !reporting,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(

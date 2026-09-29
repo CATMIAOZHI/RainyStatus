@@ -17,6 +17,7 @@ import com.rainy.status.data.remote.ReportError
 fun describeError(error: ReportError): UiText = when (error) {
     is ReportError.Unauthorized -> UiText.Resource(R.string.error_unauthorized)
     is ReportError.Contract -> UiText.Resource(R.string.error_bad_request, listOf(error.httpCode))
+    is ReportError.EndpointNotFound -> UiText.Resource(R.string.error_endpoint_not_found)
     ReportError.PayloadTooLarge -> UiText.Resource(R.string.error_too_large)
     is ReportError.RateLimited -> UiText.Resource(R.string.error_rate_limited)
     is ReportError.Server -> UiText.Resource(R.string.error_server, listOf(error.httpCode))

@@ -106,8 +106,16 @@ class StatusHeartbeatService : Service() {
             }
 
             else -> {
-                // 无 action（系统重启服务 / 开机拉起）：恢复循环
-                scope.launch { triggerReport(ReportTrigger.BOOT) }
+                // 无 action：开机拉起（BootReceiver 会给 BOOT）或 START_STICKY 的进程重启。
+                // 两者必须区分：BOOT 永远放行（用户期待开机立刻恢复在线），
+                // 而 STICKY 重启会被 HyperOS 这类反复杀后台的系统当成免费写额度，
+                // 因此按 UNLOCK 的门控走，只有距上次成功够一个间隔才真发。
+                val trigger = if (intent == null) {
+                    ReportTrigger.STICKY_RESTART
+                } else {
+                    ReportTrigger.BOOT
+                }
+                scope.launch { triggerReport(trigger) }
             }
         }
 

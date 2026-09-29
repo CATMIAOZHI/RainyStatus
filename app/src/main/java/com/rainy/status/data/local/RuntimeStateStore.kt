@@ -99,6 +99,19 @@ class RuntimeStateStore(private val dataStore: DataStore<Preferences>) {
         prefs[KEY_LAST_BATTERY] = batteryPercent
     }
 
+    /**
+     * 只把今日写计数 +1，**不碰**成功时刻、不碰待发队列、不碰错误标记。
+     *
+     * 专给「产生了 KV 写、但不是一次心跳成功」的路径用（目前是心情上报）：
+     * 复用 [recordSuccess] 会把心情也算成「刚刚心跳成功」，于是首页与通知里的
+     * 「上次上报」会撒谎，掉线判定也会被心情上报推后。
+     */
+    suspend fun incrementWrites(writesToday: Int, writesDayStartUtc: Long) =
+        dataStore.edit { prefs ->
+            prefs[KEY_WRITES_TODAY] = writesToday
+            prefs[KEY_WRITES_DAY] = writesDayStartUtc
+        }
+
     suspend fun setPending(json: String?) = dataStore.edit { prefs ->
         if (json == null) prefs.remove(KEY_PENDING) else prefs[KEY_PENDING] = json
     }

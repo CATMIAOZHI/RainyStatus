@@ -190,6 +190,24 @@ class StatusRepository(
         }
     }
 
+    /**
+     * 记一次「已消耗的 KV 写」。
+     *
+     * 三条会产生 KV 写的路径（心跳 [report]、补发 [flushPending]、心情 [sendMood]）
+     * **必须全部调用它**：漏掉任何一条，[WriteBudget] 的降频保护就会低估真实用量，
+     * 于是「本地显示没超、服务端额度先爆」——心跳开始收 500，而 App 的兜底始终没触发。
+     * 设置页的「连接测试」也会真发一条心跳（见 [testConnection]），同样要计。
+     *
+     * 只动计数，不动成功时刻（心情写成功不等于心跳成功，见 RuntimeStateStore.incrementWrites）。
+     */
+    private suspend fun recordKvWrite(runtime: RuntimeState, now: Long) {
+        val writes = WriteBudget.normalizeWrites(runtime.writesToday, runtime.writesDayStartUtc, now)
+        runtimeStateStore.incrementWrites(
+            writesToday = writes + 1,
+            writesDayStartUtc = WriteBudget.utcDayStart(now),
+        )
+    }
+
     /** 发送心情（内容未变则不发送——服务端不做读-比较-写，去重必须在客户端） */
     suspend fun sendMood(text: String, emoji: String? = null): ReportOutcome = mutex.withLock {
         val settings = settingsStore.settings.first()
@@ -209,6 +227,9 @@ class StatusRepository(
         when (result) {
             is ApiResult.Success -> {
                 runtimeStateStore.setLastMoodText(trimmed)
+                // 心情写入同样消耗一次 KV 写，必须计入预算：否则连发心情会绕过降频保护，
+                // 真实写入量超出账号级 1000/天时心跳先被拒，而 App 还显示「没超」
+                recordKvWrite(runtime, System.currentTimeMillis())
                 DebugLog.i(TAG, "Mood sent OK")
                 ReportOutcome.Success(result.value.updatedAt)
             }
@@ -258,6 +279,10 @@ class StatusRepository(
                 )
                 when (val sent = api.sendHeartbeat(baseUrl, settings.token, payload.toDto())) {
                     is ApiResult.Success -> {
+                        // 连接测试真的发了一次心跳＝真的消耗了一次 KV 写，必须计入预算。
+                        // 不计的话：反复点「连接测试」就能绕过 WriteBudget 的降频保护，
+                        // 本地显示「没超」而服务端额度先爆（与心情上报同一个坑）。
+                        recordKvWrite(runtimeStateStore.snapshot(), System.currentTimeMillis())
                         DebugLog.i(TAG, "Connection test OK (HTTP $code → ${sent.httpCode})")
                         ConnectionTestResult.Ok(sent.httpCode)
                     }
@@ -366,6 +391,7 @@ class StatusRepository(
     private fun describe(error: ReportError): String = when (error) {
         is ReportError.Unauthorized -> "unauthorized (HTTP ${error.httpCode})"
         is ReportError.Contract -> "contract error (HTTP ${error.httpCode} ${error.code}: ${error.message})"
+        is ReportError.EndpointNotFound -> "endpoint not found (404: ${error.message})"
         ReportError.PayloadTooLarge -> "payload too large"
         is ReportError.RateLimited -> "rate limited (retryAfter=${error.retryAfterSeconds})"
         is ReportError.Server -> "server error (HTTP ${error.httpCode})"

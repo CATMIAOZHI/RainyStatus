@@ -12,6 +12,7 @@ import com.rainy.status.data.repository.StatusRepository
 import com.rainy.status.domain.model.ReportTrigger
 import com.rainy.status.domain.report.WriteBudget
 import com.rainy.status.domain.server.EndpointNormalizer
+import com.rainy.status.di.ScopeQualifiers
 import com.rainy.status.service.StatusHeartbeatService
 import com.rainy.status.ui.components.UiText
 import com.rainy.status.ui.components.describeError
@@ -19,6 +20,9 @@ import com.rainy.status.util.LocaleManager
 import com.rainy.status.util.PermissionUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Named
 
 /** 连接测试的展示状态 */
 sealed interface TestState {
@@ -45,6 +50,8 @@ data class SettingsUiState(
     val endpointError: UiText? = null,
     val tokenError: UiText? = null,
     val message: UiText? = null,
+    /** 正在手动上报：按钮防连点（MANUAL 绕过一切节流） */
+    val reporting: Boolean = false,
     /** 语言偏好：null = 跟随系统 */
     val localeCode: String? = null,
     val keepAlive: KeepAliveUi = KeepAliveUi(),
@@ -71,10 +78,35 @@ class SettingsViewModel @Inject constructor(
     private val repository: StatusRepository,
     private val settingsStore: SettingsStore,
     @ApplicationContext private val appContext: Context,
+    /**
+     * 应用级作用域：给「失焦即落盘」用。
+     *
+     * 不能用 viewModelScope —— 用户改完地址直接按返回键时，ViewModel 会被清除、
+     * viewModelScope 随之取消，写入就丢了。appScope 与进程同寿命，写入一定能落地。
+     */
+    @Named(ScopeQualifiers.APP) private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    /**
+     * 三个文本框的落盘防抖任务。
+     *
+     * 为什么不用「失焦时提交」：`onFocusChanged` 的回调与 NavHost 的 pop 是竞态的，
+     * 「改完地址直接按返回键」会让协程还没执行就被 `viewModelScope` 取消 → **静默丢输入**，
+     * 而且 `endpointError` 从未被设置，用户只会发现「设置了但没生效」。
+     * 也不能立刻落盘：边输边写会让 `LaunchedEffect(settings.endpoint)` 回灌、
+     * 覆盖用户正在打的字。所以走「边输边防抖落盘」，与首页草稿同一套模式。
+     *
+     * 防抖任务本身也跑 [appScope]（不是 viewModelScope）：`onFocusChanged` 不一定触发
+     * （系统返回手势、弹窗收起时焦点常保持不变），若最后一次输入后 600ms 内离开页面，
+     * 跑在 viewModelScope 的任务会被取消，这次输入就丢了。appScope 与进程同寿命，
+     * 保证「最后一次输入」一定落地。
+     */
+    private var endpointJob: Job? = null
+    private var tokenJob: Job? = null
+    private var deviceNameJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -111,8 +143,49 @@ class SettingsViewModel @Inject constructor(
 
     // ── 服务器 ──
 
-    /** 提交地址（失焦 / 点保存时调用）：非法输入立即提示，合法才落盘 */
-    fun commitEndpoint(value: String) {
+    /**
+     * 地址边输边落盘（防抖 [COMMIT_DEBOUNCE_MS]）。
+     *
+     * 校验错误延后到防抖之后才显示：正在输入时把中间态（`https://` 还没打完）标红
+     * 会把「还在打字」误判成「填错了」。
+     */
+    fun onEndpointChange(value: String) {
+        endpointJob?.cancel()
+        // 用 appScope 而非 viewModelScope：离开页面时 viewModelScope 会被取消，
+        // 最后一次输入若还在防抖窗口里就丢了（onFocusChanged 不保证触发）
+        endpointJob = appScope.launch {
+            delay(COMMIT_DEBOUNCE_MS)
+            commitEndpoint(value)
+        }
+    }
+
+    /**
+     * 失焦时立刻落盘并取消待执行的防抖任务。
+     *
+     * 这一步是**必须**的：用户改完地址直接按返回键时，`onFocusChanged` 的回调
+     * 可能早于 NavHost 的 pop，若仍等防抖就会被 `viewModelScope` 取消而丢输入。
+     * 因此这里取消防抖并**改走 appScope**，保证写入在 ViewModel 清除过程中也能完成。
+     */
+    fun commitEndpointNow(value: String) {
+        endpointJob?.cancel()
+        endpointJob = null
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) {
+            // 报错而不是静默 return：防抖路径（commitEndpoint）对同一输入会提示「必填」，
+            // 这里若什么都不做，用户看到的是「输入框空着、磁盘里还是旧地址、零提示」，
+            // 随后点「连接测试」测的仍是旧地址——与 P1-1 同型的静默陷阱。
+            _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_required)) }
+            return
+        }
+        if (EndpointNormalizer.normalize(trimmed) is EndpointNormalizer.Result.Valid) {
+            appScope.launch { settingsStore.setEndpoint(trimmed) }
+        } else {
+            _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_error)) }
+        }
+    }
+
+    /** 提交地址：非法输入立即提示，合法才落盘 */
+    private suspend fun commitEndpoint(value: String) {
         val trimmed = value.trim()
         if (trimmed.isEmpty()) {
             _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_required)) }
@@ -121,24 +194,57 @@ class SettingsViewModel @Inject constructor(
         when (EndpointNormalizer.normalize(trimmed)) {
             is EndpointNormalizer.Result.Valid -> {
                 _uiState.update { it.copy(endpointError = null) }
-                viewModelScope.launch { settingsStore.setEndpoint(trimmed) }
+                settingsStore.setEndpoint(trimmed)
             }
             else -> _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_error)) }
         }
     }
 
-    fun commitToken(value: String) {
+    fun onTokenChange(value: String) {
+        tokenJob?.cancel()
+        tokenJob = appScope.launch {
+            delay(COMMIT_DEBOUNCE_MS)
+            commitToken(value)
+        }
+    }
+
+    /** 失焦时立刻落盘（同 [commitEndpointNow] 的理由） */
+    fun commitTokenNow(value: String) {
+        tokenJob?.cancel()
+        tokenJob = null
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) {
+            // 同 commitEndpointNow：静默 return 会让「清空 Token → 失焦」变成
+            // 输入框空着、磁盘里仍是旧 Token、零提示，随后测试用的还是旧值。
+            _uiState.update { it.copy(tokenError = UiText.Resource(R.string.settings_token_required)) }
+            return
+        }
+        appScope.launch { settingsStore.setToken(trimmed) }
+    }
+
+    private suspend fun commitToken(value: String) {
         val trimmed = value.trim()
         if (trimmed.isEmpty()) {
             _uiState.update { it.copy(tokenError = UiText.Resource(R.string.settings_token_required)) }
             return
         }
         _uiState.update { it.copy(tokenError = null) }
-        viewModelScope.launch { settingsStore.setToken(trimmed) }
+        settingsStore.setToken(trimmed)
     }
 
-    fun clearTestState() {
-        _uiState.update { it.copy(testState = TestState.Idle) }
+    fun onDeviceNameChange(value: String) {
+        deviceNameJob?.cancel()
+        deviceNameJob = appScope.launch {
+            delay(COMMIT_DEBOUNCE_MS)
+            settingsStore.setDeviceName(value.trim())
+        }
+    }
+
+    /** 失焦时立刻落盘（设备名没有校验失败态，直接写） */
+    fun commitDeviceNameNow(value: String) {
+        deviceNameJob?.cancel()
+        deviceNameJob = null
+        appScope.launch { settingsStore.setDeviceName(value.trim()) }
     }
 
     fun testConnection() {
@@ -184,17 +290,24 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun reportNow() {
+        if (_uiState.value.reporting) return
+        _uiState.update { it.copy(reporting = true) }
         viewModelScope.launch {
-            val message = when (val outcome = repository.report(ReportTrigger.MANUAL)) {
-                is ReportOutcome.Success -> UiText.Resource(R.string.home_report_success)
-                is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
-                is ReportOutcome.Skipped -> null
-                is ReportOutcome.Failed -> UiText.Resource(
-                    R.string.home_report_failed,
-                    listOf(describeError(outcome.error))
-                )
+            try {
+                val message = when (val outcome = repository.report(ReportTrigger.MANUAL)) {
+                    is ReportOutcome.Success -> UiText.Resource(R.string.home_report_success)
+                    is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
+                    is ReportOutcome.Skipped -> null
+                    is ReportOutcome.Failed -> UiText.Resource(
+                        R.string.home_report_failed,
+                        listOf(describeError(outcome.error))
+                    )
+                }
+                _uiState.update { it.copy(message = message) }
+            } finally {
+                // 必须放在 finally：抛异常时按钮若停在 disabled，用户就再也点不动了
+                _uiState.update { it.copy(reporting = false) }
             }
-            _uiState.update { it.copy(message = message) }
         }
     }
 
@@ -204,7 +317,6 @@ class SettingsViewModel @Inject constructor(
     fun setIncludeCharging(value: Boolean) = viewModelScope.launch { settingsStore.setIncludeCharging(value) }
     fun setIncludeTemperature(value: Boolean) = viewModelScope.launch { settingsStore.setIncludeTemperature(value) }
     fun setIncludeNetwork(value: Boolean) = viewModelScope.launch { settingsStore.setIncludeNetwork(value) }
-    fun setDeviceName(value: String) = viewModelScope.launch { settingsStore.setDeviceName(value) }
 
     // ── 心情 ──
 
@@ -227,5 +339,15 @@ class SettingsViewModel @Inject constructor(
 
     fun consumeMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    private companion object {
+        /**
+         * 三个文本框的落盘防抖。
+         *
+         * 比首页心情草稿（500ms）略长：设置项改一次就够，用户可能连续改错再改，
+         * 稍长能少写几次 DataStore；而失焦路径是立即落盘的，不会因此丢输入。
+         */
+        const val COMMIT_DEBOUNCE_MS = 600L
     }
 }

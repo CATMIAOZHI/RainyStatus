@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只在 XML 层使用的颜色（Compose 配色在 ui/theme/Color.kt）。
+
+  window_background 必须与 Compose 背景起始色一致：
+  浅色 CherryPinkLight (#FFF0F5) / 深色 DarkBackground (#1F1419)。
+-->
+<resources>
+    <color name="window_background">#FFF0F5</color>
+</resources>

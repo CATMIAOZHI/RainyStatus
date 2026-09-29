@@ -18,4 +18,13 @@ enum class ReportTrigger {
     NETWORK,
     UNLOCK,
     BATTERY_CHANGE,
+
+    /**
+     * `START_STICKY` 的进程重启（不是用户开机）。
+     *
+     * 与 [BOOT] 分开是必要的：HyperOS/MIUI 会反复杀后台，系统每次把服务拉起来
+     * 都会走「无 action」分支；若沿用 [BOOT]（永远放行），每被杀一次就多写一次 KV。
+     * 这条按 [UNLOCK] 规则走（距上次成功够一个间隔才发）。
+     */
+    STICKY_RESTART,
 }

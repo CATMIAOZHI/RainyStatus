@@ -37,6 +37,7 @@
     <string name="home_report_failed">Report failed: %1$s</string>
     <string name="home_state_ok">Healthy</string>
     <string name="home_state_auth_error">Token rejected — check your token</string>
+    <string name="home_state_report_error">Reporting is failing — check the debug log</string>
     <string name="home_state_not_configured">Not configured yet</string>
     <string name="home_state_throttled">Daily limit guard active — slowed down</string>
     <string name="home_mood_title">Current mood</string>
@@ -101,6 +102,7 @@
     <string name="settings_field_network">Network type</string>
     <string name="settings_field_device_name">Device name</string>
     <string name="settings_device_name_hint">Shown publicly on the status page. Leave empty to hide.</string>
+    <string name="settings_device_name_counter_full">%1$d/%2$d characters — limit reached</string>
     <string name="settings_privacy_hint">Everything you enable here is publicly visible on your status page. Your IP address, location and Wi-Fi name are never collected.</string>
 
     <string name="settings_mood_enabled">Share mood</string>
@@ -160,6 +162,7 @@
     <string name="error_timeout">Request timed out</string>
     <string name="error_unauthorized">Token rejected (HTTP 401)</string>
     <string name="error_bad_request">Server rejected the data (HTTP %1$d)</string>
+    <string name="error_endpoint_not_found">Endpoint not found (HTTP 404) — check the server address</string>
     <string name="error_too_large">Report is too large (HTTP 413)</string>
     <string name="error_rate_limited">Rate limited (HTTP 429)</string>
     <string name="error_server">Server error (HTTP %1$d)</string>

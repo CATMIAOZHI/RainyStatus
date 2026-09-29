@@ -46,6 +46,8 @@ data class HomeUiState(
      * 发送失败时清空会把用户刚打好的字丢掉，而草稿本来就是为了防这个。
      */
     val moodSentCount: Int = 0,
+    /** 正在手动上报：用于按钮防连点（MANUAL 在门控里无条件放行，连点会真写多次 KV） */
+    val reporting: Boolean = false,
     /** 一次性提示（Snackbar） */
     val message: UiText? = null,
 )
@@ -147,19 +149,33 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 手动上报。
+     *
+     * 用 [reporting] 做防连点：`MANUAL` 在门控里是无条件放行的，连点 N 次就是
+     * N 次真实 `POST /api/heartbeat` = N 次 KV 写。免费额度 1000/天，
+     * 这个入口是用户最容易自己把它打爆的地方。
+     */
     fun reportNow() {
+        if (_uiState.value.reporting) return
+        _uiState.update { it.copy(reporting = true) }
         viewModelScope.launch {
-            val message = when (val outcome = repository.report(ReportTrigger.MANUAL)) {
-                is ReportOutcome.Success -> UiText.Resource(R.string.home_report_success)
-                is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
-                is ReportOutcome.Skipped -> null
-                is ReportOutcome.Failed -> UiText.Resource(
-                    R.string.home_report_failed,
-                    listOf(describeError(outcome.error))
-                )
+            try {
+                val message = when (val outcome = repository.report(ReportTrigger.MANUAL)) {
+                    is ReportOutcome.Success -> UiText.Resource(R.string.home_report_success)
+                    is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
+                    is ReportOutcome.Skipped -> null
+                    is ReportOutcome.Failed -> UiText.Resource(
+                        R.string.home_report_failed,
+                        listOf(describeError(outcome.error))
+                    )
+                }
+                _uiState.update { it.copy(message = message) }
+                refreshAfterReport()
+            } finally {
+                // 必须放在 finally：抛异常时按钮若停在 disabled，用户就再也点不动了
+                _uiState.update { it.copy(reporting = false) }
             }
-            _uiState.update { it.copy(message = message) }
-            refreshAfterReport()
         }
     }
 

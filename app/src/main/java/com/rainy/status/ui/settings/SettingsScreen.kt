@@ -183,14 +183,18 @@ fun SettingsScreen(
                 SettingsCard(stringResource(R.string.settings_group_server)) {
                     OutlinedTextField(
                         value = endpointInput,
-                        onValueChange = { endpointInput = it },
+                        onValueChange = {
+                            endpointInput = it
+                            viewModel.onEndpointChange(it)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .onFocusChanged { focus ->
                                 if (focus.isFocused) {
                                     endpointTouched = true
                                 } else if (endpointTouched) {
-                                    viewModel.commitEndpoint(endpointInput)
+                                    // 失焦立刻落盘：用户可能紧接着按返回键，等防抖会丢输入
+                                    viewModel.commitEndpointNow(endpointInput)
                                 }
                             },
                         label = { Text(stringResource(R.string.settings_endpoint)) },
@@ -205,14 +209,17 @@ fun SettingsScreen(
 
                     OutlinedTextField(
                         value = tokenInput,
-                        onValueChange = { tokenInput = it },
+                        onValueChange = {
+                            tokenInput = it
+                            viewModel.onTokenChange(it)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .onFocusChanged { focus ->
                                 if (focus.isFocused) {
                                     tokenTouched = true
                                 } else if (tokenTouched) {
-                                    viewModel.commitToken(tokenInput)
+                                    viewModel.commitTokenNow(tokenInput)
                                 }
                             },
                         label = { Text(stringResource(R.string.settings_token)) },
@@ -301,6 +308,9 @@ fun SettingsScreen(
                         }
                         Button(
                             onClick = { viewModel.reportNow() },
+                            // 与同屏「连接测试」的 enabled = !testing 保持一致：
+                            // ViewModel 里已有同步防连点守卫，但按钮不置灰就没有任何「上报中」反馈
+                            enabled = !state.reporting,
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = StrawberryPink,
@@ -345,7 +355,10 @@ fun SettingsScreen(
                         value = deviceNameInput,
                         onValueChange = { input ->
                             // 与云端校验上限一致（见 SettingsStore.MAX_DEVICE_NAME_LENGTH）：超长直接不接受输入
-                            if (input.length <= SettingsStore.MAX_DEVICE_NAME_LENGTH) deviceNameInput = input
+                            if (input.length <= SettingsStore.MAX_DEVICE_NAME_LENGTH) {
+                                deviceNameInput = input
+                                viewModel.onDeviceNameChange(input)
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -354,11 +367,22 @@ fun SettingsScreen(
                                 if (focus.isFocused) {
                                     deviceNameTouched = true
                                 } else if (deviceNameTouched) {
-                                    viewModel.setDeviceName(deviceNameInput)
+                                    viewModel.commitDeviceNameNow(deviceNameInput)
                                 }
                             },
                         label = { Text(stringResource(R.string.settings_field_device_name)) },
-                        supportingText = { Text(stringResource(R.string.settings_device_name_hint)) },
+                        // 超长时是"静默不接受输入"，用户会以为键盘失灵；直接显示已用字数最直观
+                        supportingText = {
+                            val used = deviceNameInput.length
+                            val max = SettingsStore.MAX_DEVICE_NAME_LENGTH
+                            Text(
+                                if (used >= max) {
+                                    stringResource(R.string.settings_device_name_counter_full, used, max)
+                                } else {
+                                    stringResource(R.string.settings_device_name_hint)
+                                }
+                            )
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )

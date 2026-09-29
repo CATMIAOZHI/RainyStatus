@@ -173,6 +173,7 @@ class StatusApi(
         return when (code) {
             401, 403 -> ReportError.Unauthorized(code)
             400, 415 -> ReportError.Contract(code, errorCode, errorMessage)
+            404 -> ReportError.EndpointNotFound(errorMessage)
             413 -> ReportError.PayloadTooLarge
             429 -> ReportError.RateLimited(retryAfter?.trim()?.toLongOrNull())
             in 500..599 -> ReportError.Server(code)

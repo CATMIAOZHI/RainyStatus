@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.RainyStatus" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- 冷启动（首帧 Compose 尚未绘制）时的窗口底色，与浅色窗口底色同源。 -->
+    <style name="Theme.RainyStatus" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
 </resources>

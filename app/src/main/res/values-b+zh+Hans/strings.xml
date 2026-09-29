@@ -36,6 +36,7 @@
     <string name="home_report_failed">上报失败：%1$s</string>
     <string name="home_state_ok">正常</string>
     <string name="home_state_auth_error">Token 被拒绝，请检查设置</string>
+    <string name="home_state_report_error">上报失败，请查看调试日志</string>
     <string name="home_state_not_configured">尚未配置</string>
     <string name="home_state_throttled">已触发每日额度保护，自动降频</string>
     <string name="home_mood_title">现在的心情</string>
@@ -100,6 +101,7 @@
     <string name="settings_field_network">网络类型</string>
     <string name="settings_field_device_name">设备名称</string>
     <string name="settings_device_name_hint">会公开显示在状态页上，留空则不显示。</string>
+    <string name="settings_device_name_counter_full">%1$d/%2$d 个字符，已达上限</string>
     <string name="settings_privacy_hint">这里开启的内容都会公开显示在你的状态页上。IP、位置、Wi-Fi 名称一律不采集。</string>
 
     <string name="settings_mood_enabled">分享心情</string>
@@ -156,6 +158,7 @@
     <string name="error_timeout">请求超时</string>
     <string name="error_unauthorized">Token 被拒绝（HTTP 401）</string>
     <string name="error_bad_request">服务器拒绝了数据（HTTP %1$d）</string>
+    <string name="error_endpoint_not_found">找不到接口（HTTP 404），请检查服务器地址</string>
     <string name="error_too_large">上报内容过大（HTTP 413）</string>
     <string name="error_rate_limited">触发限流（HTTP 429）</string>
     <string name="error_server">服务器错误（HTTP %1$d）</string>

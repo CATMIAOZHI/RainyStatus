@@ -65,7 +65,7 @@ export function siteConfig(env: Env): SiteConfig {
     showNetwork: bool(env.SHOW_NETWORK, false),
     showMood: bool(env.SHOW_MOOD, true),
     timezoneOffsetMinutes: timezoneOffsetMinutes(env),
-    defaultLang: str(env.DEFAULT_LANG, 'zh-Hans'),
+    defaultLang: sanitizeLang(env.DEFAULT_LANG),
     offlineThresholdMs: offlineThresholdMs(env),
   };
 }

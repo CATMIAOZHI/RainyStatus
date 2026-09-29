@@ -4,7 +4,7 @@
   --pink-soft: #ffd1dc;
   --pink-mist: #fff0f5;
   --text: #3a2c31;
-  --text-dim: #8a737a;
+  --text-dim: #75616a;
   --card: rgba(255, 255, 255, 0.82);
   --ok: #34c759;
   --off: #ff9f0a;
@@ -31,6 +31,9 @@ html, body {
 
 body {
   display: flex;
+  /* 必须显式 column：默认是 row，而 <noscript> 也是 body 的子元素，
+     无 JS 时会和卡片并排挤成窄条。有了 column，noscript 正常堆在卡片上方。 */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
@@ -108,8 +111,10 @@ h1 {
 .lang-switch { display: flex; gap: 4px; flex: 0 0 auto; }
 
 .lang-btn {
-  width: 30px;
-  height: 30px;
+  /* 36px：略大于原 30px，接近 WCAG 2.5.5 建议的 44px 触摸目标，
+     同时保证三个按钮在 420px 卡片里不挤压标题 */
+  width: 36px;
+  height: 36px;
   border: 1px solid rgba(255, 133, 162, 0.35);
   border-radius: 9px;
   background: transparent;
@@ -290,13 +295,21 @@ h1 {
 
 .foot-sub { margin-top: 4px; }
 
-.stale { color: var(--off); }
+/* 必须写成 `.foot .stale`（特异性 0,2,0）而不是单独的 `.stale`（0,1,0）：
+   `.foot p { color: var(--text-dim) }`（0,1,1）会压过后者的类选择器，
+   于是「掉线提示」这个最该变色的元素反而不变色。
 
-.error-banner {
-  margin-top: 16px;
+   也不能写成 `.foot p.stale`（0,1,1）：那只匹配 <p>，而 #refreshedAt 是 <p> 里的
+   <span>，会让本轮新增的「读取失败」标记失效。`.foot .stale` 两者都覆盖。 */
+.foot .stale { color: var(--off); }
+
+/* 无 JS 时的提示条（app.js 加载失败或用户禁用脚本时唯一可见的说明） */
+.noscript {
+  margin: 0 0 16px;
   padding: 10px 14px;
   border-radius: 14px;
-  background: rgba(255, 59, 48, 0.1);
-  color: var(--gone);
+  background: rgba(255, 159, 10, 0.12);
+  color: var(--text);
   font-size: 13px;
+  line-height: 1.5;
 }

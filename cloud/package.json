@@ -7,9 +7,14 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "dry-run": "wrangler deploy --dry-run --outdir=dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "tail": "wrangler tail"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260929.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
     "wrangler": "^4.143.0"
   }
 }

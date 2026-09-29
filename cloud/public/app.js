@@ -117,16 +117,32 @@ let lang = detectLang();
 
 const el = (id) => document.getElementById(id);
 
+function hasStoredLang() {
+  try {
+    const stored = localStorage.getItem(LANG_STORAGE_KEY);
+    return !!stored && SUPPORTED_LANGS.includes(stored);
+  } catch {
+    return false; // localStorage 可能被禁用
+  }
+}
+
+/**
+ * 浏览器语言是否命中本站支持的某一种语言。
+ *
+ * 用途：`site.defaultLang` 只在**没命中**时兜底。若用它覆盖「已命中」的情况，
+ * 默认配置（`zh-Hans`）下英文访客会被强制切成中文——`navigator.language` 自动判定
+ * 就形同虚设了，比「配置项不生效」更糟。
+ */
+function navLangMatched() {
+  const nav = (navigator.language || '').toLowerCase();
+  return nav.startsWith('zh') || nav.startsWith('en');
+}
+
 function detectLang() {
   const fromUrl = new URLSearchParams(location.search).get('lang');
   if (fromUrl && SUPPORTED_LANGS.includes(fromUrl)) return fromUrl;
 
-  try {
-    const stored = localStorage.getItem(LANG_STORAGE_KEY);
-    if (stored && SUPPORTED_LANGS.includes(stored)) return stored;
-  } catch {
-    // localStorage 可能被禁用，忽略
-  }
+  if (hasStoredLang()) return localStorage.getItem(LANG_STORAGE_KEY);
 
   const nav = (navigator.language || '').toLowerCase();
   if (nav.startsWith('zh')) {
@@ -135,6 +151,7 @@ function detectLang() {
       : 'zh-Hans';
   }
   if (nav.startsWith('en')) return 'en';
+  // 未命中任何支持的语言 → 交给 site.defaultLang 兜底（见 render）
   return 'zh-Hans';
 }
 
@@ -245,6 +262,16 @@ function networkLabel(value) {
 function render(data) {
   if (data.site) {
     site = data.site;
+
+    // DEFAULT_LANG 生效点：`site.defaultLang` 是**兜底**，不是覆盖。
+    // 只有「访客没显式选过语言」且「浏览器语言没命中任何受支持语言」时才用它——
+    // 否则默认值就是 zh-Hans，英文访客会被强制切成中文，自动判定形同虚设。
+    const choseExplicitly = new URLSearchParams(location.search).has('lang') || hasStoredLang();
+    if (!choseExplicitly && !navLangMatched() && SUPPORTED_LANGS.includes(site.defaultLang) && site.defaultLang !== lang) {
+      lang = site.defaultLang;
+      applyStaticI18n();
+    }
+
     // 站点信息来自服务端 vars，部署者看到的是自己的
     setText(el('title'), site.title);
     setText(el('owner'), site.owner);
@@ -280,13 +307,16 @@ function render(data) {
 
   const device = data.device;
   const batterySection = el('batterySection');
+  const hasBattery = device !== null && device !== undefined && typeof device.batteryPercent === 'number';
 
-  if (!device || device.batteryPercent === null || device.batteryPercent === undefined) {
-    batterySection.hidden = device !== null && device.batteryPercent === null && device.appVersion !== null;
+  if (!hasBattery) {
+    // 两种情况必须区分开：
+    // - 从未上报（device === null）→ 显示占位「—」+「从未上报」，让访客知道是「还没有数据」
+    // - 上报过但没带电量（用户在设置里关了电量）→ 整块隐藏，展示无意义的「—」只会让人以为出故障
+    batterySection.hidden = device !== null && device !== undefined;
     setText(el('batteryValue'), '—');
-    setText(el('batterySub'), device === null ? t('neverSeen') : '');
+    setText(el('batterySub'), device ? '' : t('neverSeen'));
     el('batteryFill').style.width = '0%';
-    if (device === null) batterySection.hidden = false;
   } else {
     batterySection.hidden = false;
     const pct = device.batteryPercent;
@@ -369,9 +399,17 @@ async function load() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     render(data);
+    // 成功后清掉「上次读取失败」的残留标记（否则恢复后仍显示失败）
+    const refreshed = el('refreshedAt');
+    refreshed.classList.remove('stale');
   } catch {
     setText(el('statusText'), t('loadFailed'));
     el('statusDot').className = 'dot gone';
+    // 关键：读取失败时页面上的电量/时间都是**上一次成功的数据**，
+    // 若不标记，访客会把陈旧数值当成刚刚刷新的（误以为手机还活着）。
+    const refreshed = el('refreshedAt');
+    setText(refreshed, t('loadFailed'));
+    refreshed.classList.add('stale');
   }
 }
 

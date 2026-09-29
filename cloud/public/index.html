@@ -5,10 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <meta name="robots" content="noindex" />
+  <!-- 首屏（脚本执行前）的标题与说明由 app.js 按 site 配置覆盖。
+       lang 属性同样由 app.js 的 applyStaticI18n() 按当前语言改写。 -->
   <title>RainyStatus</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <noscript>
+    <!-- 无 JS 时无法按语言切换，因此并列两种最可能有用的语言 -->
+    <p class="noscript">
+      此页面需要 JavaScript 才能读取手机状态，请启用后刷新。<br />
+      This page needs JavaScript to read the phone status. Please enable it and reload.
+    </p>
+  </noscript>
   <main class="card" id="card">
     <header class="head">
       <div class="avatar" id="avatar" aria-hidden="true">☔</div>

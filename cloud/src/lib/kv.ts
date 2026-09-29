@@ -37,18 +37,34 @@ export async function readCurrentMood(kv: KVNamespace): Promise<CurrentMood | nu
 /**
  * 一次 bulk read 取两个 key。
  * 计费仍按 2 个 key 算，但省一次 KV 操作/subrequest。
+ *
+ * **返回类型是 `Map`，不是普通对象**（官方签名 `get(keys: string[]) =>
+ * Promise<Map<string, string | Object | null>>`）。按普通对象下标取值会全得 `undefined`，
+ * 症状是「心跳明明写进去了，网页却永远显示从未上报」——静默失效，最坏的那种 bug。
+ * 这里对两种形态都兼容，避免依赖运行时细节再次踩坑。
  */
 export async function readBoth(
   kv: KVNamespace,
 ): Promise<{ device: DeviceStatus | null; mood: CurrentMood | null }> {
   const result = await kv.get([KV_KEY_DEVICE, KV_KEY_MOOD], { cacheTtl: KV_CACHE_TTL });
-  if (result === null || typeof result !== 'object' || Array.isArray(result)) {
-    return { device: null, mood: null };
-  }
-  const map = result as Record<string, string | null>;
+
+  const lookup = (key: string): string | null => {
+    if (result === null || typeof result !== 'object') return null;
+    // 鸭子判定而不是 `instanceof Map`：后者在跨 realm（isolate 边界）时会失败，
+    // 而兜底分支按属性取值对 Map **同样**返回 undefined —— 两条分支都返回 null，
+    // 于是 P0 会原样复发且无声。按「有没有 get 方法」判定与 realm 无关。
+    const getter = (result as { get?: (k: string) => unknown }).get;
+    const value = typeof getter === 'function'
+      ? getter.call(result, key)
+      // 先转 unknown 再转 Record：直接断言会被 tsc 拒绝（Map 没有 string 索引签名），
+      // 而这条分支正是「result 不是 Map 形态」时的兜底
+      : (result as unknown as Record<string, unknown>)[key];
+    return typeof value === 'string' ? value : null;
+  };
+
   return {
-    device: parseJson<DeviceStatus>(map[KV_KEY_DEVICE] ?? null),
-    mood: parseJson<CurrentMood>(map[KV_KEY_MOOD] ?? null),
+    device: parseJson<DeviceStatus>(lookup(KV_KEY_DEVICE)),
+    mood: parseJson<CurrentMood>(lookup(KV_KEY_MOOD)),
   };
 }
 

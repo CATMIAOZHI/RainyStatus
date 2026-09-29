@@ -24,7 +24,7 @@ export function extractBearer(request: Request): string | null {
   if (!header) return null;
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   if (!match) return null;
-  const token = match[1].trim();
+  const token = (match[1] ?? '').trim();
   return token.length > 0 ? token : null;
 }
 

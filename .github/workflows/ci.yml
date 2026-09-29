@@ -140,6 +140,15 @@ jobs:
       - name: Install dependencies
         working-directory: cloud
         run: npm install --no-audit --no-fund
+      # 类型检查必须单独跑：wrangler 的 dry-run 走 esbuild，只打包不查类型。
+      # 没有这一步，「KV bulk get 返回 Map 却按普通对象取值」这类错误能一路过 CI 到线上。
+      - name: Typecheck (tsc --noEmit)
+        working-directory: cloud
+        run: npm run typecheck
+      # 回归测试：钉住 readBoth 必须按 Map 取值的 P0 行为（见 cloud/test/kv.test.ts）
+      - name: Unit tests (vitest)
+        working-directory: cloud
+        run: npm run test
       - name: Syntax check (dry-run build)
         working-directory: cloud
         run: npx wrangler deploy --dry-run --outdir=dist

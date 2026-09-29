@@ -1,0 +1,34 @@
+{
+  // Worker 源码的类型检查配置。
+  //
+  // 为什么必须有这个文件：`wrangler deploy` 内部走 esbuild，**只转译不做类型检查**。
+  // 于是「KV bulk get 返回 Map 却按普通对象取值」这类类型错误能一路过 CI、过部署，
+  // 直到线上表现为「网页永远显示从未收到心跳」才被发现。`npm run typecheck` 补上这一环。
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+
+    // 只做类型检查，产物交给 wrangler/esbuild
+    "noEmit": true,
+
+    // 严格档：本项目规模小，全开也不会有历史包袱
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    // 允许 import 时省略 .js 后缀（Worker 源码写法）
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

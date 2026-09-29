@@ -1,6 +1,6 @@
 # 雨晴Status · 设计方案
 
-> 状态：**方案已定稿，待水晴喵确认部署凭据后开工**
+> 状态：**方案已定稿，工程已落地**（App + Worker + 静态页均已实现；云端尚未部署，等部署凭据）
 > 最后更新：2026-09-30
 
 ---
@@ -232,8 +232,11 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | `SHOW_NETWORK` | `false` | 同上 |
 | `SHOW_MOOD` | `true` | 是否展示心情 |
 | `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝按访客自己的时区；填数字（如 `480`）＝固定 UTC+8 |
-| `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en` |
-| `REQUIRE_VIEW_PASSWORD` | `false` | 可选：网页访问口令（v1 预留，默认关闭） |
+| `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才用它 |
+| `NEXT_EXPECTED_MS` | `600000` | 下一条心跳的期望间隔（毫秒）—— 也随 `/api/heartbeat` 响应下发 |
+
+> 网页访问口令**不在 v1 范围**：静态资源在 Worker 之前命中，口令逻辑无处安放，
+> 需连同 `run_worker_first` 一起设计。因此这里不列出该变量，避免部署者以为它已生效。
 
 这些变量在 Deploy to Cloudflare 的配置页里可被用户直接改，也会写回他们自己的仓库。
 
@@ -337,7 +340,7 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
   - `values-b+zh+Hans/` → 简体
   - `values-b+zh+Hant/` → 繁體
 - 品牌名 `translatable="false"`；`app_name` 跟随语言（中文系统显「雨晴Status」，其他显 `RainyStatus`）。
-- **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定，回退 `zh-Hans`；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。
+- **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。`DEFAULT_LANG` 只在**浏览器语言未命中任何受支持语言**时兜底（否则默认值 `zh-Hans` 会把英文访客强制切成中文）。
 - 网页诚实标注新鲜度：`<60s` →「刚刚」；`<60min` →「N 分钟前」；否则「N 小时 M 分钟前」。页脚注明「数据最多可能滞后约 1 分钟」。
 - **网页时间的时区**：默认 `TIMEZONE_OFFSET_MINUTES=auto` → 用**访客浏览器所在时区**渲染（`new Date()` 本地读数），页脚同时标注当前生效偏移（如 `UTC+08:00`）。填数字偏移则固定时区、所有人同一时钟。**服务端与 App 传递的时间一律是 epoch 毫秒 UTC**，时区只影响展示，不影响任何判定。
 
@@ -363,7 +366,7 @@ RainyStatus/
 ├── docs/api.md                   # 接口契约
 ├── .github/workflows/ci.yml      # 单测 + lint + 构建 + Worker dry-run
 ├── .github/workflows/release.yml # tag v* 触发
-├── README.md / README.en.md
+├── README.md
 ├── AGENTS.md / taste.md / LICENSE
 ```
 

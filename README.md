@@ -132,7 +132,7 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 | `SHOW_NETWORK` | `false` | 网页是否展示网络类型 |
 | `SHOW_MOOD` | `true` | 网页是否展示心情 |
 | `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝**按访问者自己的时区**显示；填数字（如 `480`＝UTC+8）则所有人看到同一时钟 |
-| `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en` |
+| `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才用它 |
 
 > 这些值在 Deploy to Cloudflare 的配置页里也能直接改。
 
@@ -178,7 +178,20 @@ KEYSTORE_PASSWORD=dummy KEYSTORE_ALIAS=dummy KEY_PASSWORD=dummy ./gradlew lintDe
 KEYSTORE_PASSWORD=dummy KEYSTORE_ALIAS=dummy KEY_PASSWORD=dummy ./gradlew assembleDebug
 ```
 
+> 没有 `release.jks` 时，本地（非 CI）跑**任何** Gradle 任务都需要这组变量或 `CI=true`：
+> `app/build.gradle.kts` 在配置阶段就会校验 release 签名凭据，缺失直接抛 `GradleException`。
+
 APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
+
+### 云端（`cloud/`）
+
+```bash
+cd cloud
+npm install
+npm run typecheck   # tsc --noEmit —— wrangler 只打包不检查类型，这一步不能省
+npm run test        # vitest —— readBoth 的 KV Map 回归测试
+npm run dry-run     # 真正只做打包（不上传）
+```
 
 ---
 

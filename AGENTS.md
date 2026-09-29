@@ -16,4 +16,4 @@
 
 ## 接口契约
 
-云端接口契约是 App 与 Worker 的唯一耦合点，任何一侧改动都必须同步另一侧与本文件说明。详见 `cloud/README.md` 与 `app/src/main/java/com/rainy/status/data/` 下的 DTO 定义。
+云端接口契约是 App 与 Worker 的唯一耦合点，任何一侧改动都必须同步另一侧与本文件说明。契约详见 `docs/api.md`，部署步骤见根目录 `README.md`；`app/src/main/java/com/rainy/status/data/remote/dto/Dtos.kt` 是客户端侧的对应定义。

@@ -131,7 +131,7 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 | `SHOW_TEMPERATURE` | `false` | 网页是否展示温度 |
 | `SHOW_NETWORK` | `false` | 网页是否展示网络类型 |
 | `SHOW_MOOD` | `true` | 网页是否展示心情 |
-| `TIMEZONE_OFFSET_MINUTES` | `480` | 网页展示时区（默认 UTC+8） |
+| `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝**按访问者自己的时区**显示；填数字（如 `480`＝UTC+8）则所有人看到同一时钟 |
 | `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en` |
 
 > 这些值在 Deploy to Cloudflare 的配置页里也能直接改。

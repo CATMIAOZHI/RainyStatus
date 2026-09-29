@@ -74,7 +74,8 @@ export interface SiteConfig {
   showTemperature: boolean;
   showNetwork: boolean;
   showMood: boolean;
-  timezoneOffsetMinutes: number;
+  /** null = 按访客浏览器时区显示（TIMEZONE_OFFSET_MINUTES=auto，默认）；数字 = 固定时区偏移（分钟） */
+  timezoneOffsetMinutes: number | null;
   defaultLang: string;
   offlineThresholdMs: number;
 }

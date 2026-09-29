@@ -231,7 +231,7 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | `SHOW_TEMPERATURE` | `false` | 网页是否展示温度（即使上报了也可隐藏） |
 | `SHOW_NETWORK` | `false` | 同上 |
 | `SHOW_MOOD` | `true` | 是否展示心情 |
-| `TIMEZONE_OFFSET_MINUTES` | `480` | 页面展示时区（默认 UTC+8） |
+| `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝按访客自己的时区；填数字（如 `480`）＝固定 UTC+8 |
 | `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en` |
 | `REQUIRE_VIEW_PASSWORD` | `false` | 可选：网页访问口令（v1 预留，默认关闭） |
 
@@ -291,9 +291,9 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | **B** | `AlarmManager.setExactAndAllowWhileIdle`（一次性自续，非 `setRepeating`） | 息屏 / Doze —— 但同应用**最低约 9 分钟**、低电耗模式可拉长到 ~15 分钟 |
 | **C** | 事件即时上报 | 充电插入/拔出（无条件）、解锁、网络恢复、开机 |
 
-- `canScheduleExactAlarms() == false` 时降级 `setAndAllowWhileIdle` 并在 UI 提示。
-- WorkManager **仅作兜底**：周期 30 分钟 + `NetworkType.CONNECTED` + `ExistingPeriodicWorkPolicy.KEEP`（周期最小 15 分钟，且 Doze 下 JobScheduler 全停，不能当主方案）。
-- 上报期间短持 `PARTIAL_WAKE_LOCK`（`withTimeoutOrNull(30s)` 包裹），**不常驻**。
+- `canScheduleExactAlarms() == false` 时降级 `setAndAllowWhileIdle`，并在保活卡片里提示（首页「精确闹钟」那一行的状态文案即是该提示）。
+- `WAKE_LOCK` 权限**声明但未使用**（上报是短请求，不需要持锁），保留在 Manifest 里仅为将来若要长任务的预留。
+- WorkManager **不在 v1 实现范围**：原计划作兜底（周期 30 分钟 + `NetworkType.CONNECTED` + `ExistingPeriodicWorkPolicy.KEEP`），但 Doze 下 JobScheduler 会整体停摆，兜底价值有限，而多一个后台调度通道就多一份耗电与被系统限制的风险。v1 只保留 A/B/C 三通道。
 
 ### 9.4 事件触发节流（防打爆 KV）
 
@@ -314,11 +314,13 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
 - 入队规则：已有待发时，**无意义差异**（电量差 < 1%、充电状态未翻转、无心情）→ 丢弃新的；**有意义差异** → 用新的**替换**旧的（旧电量已过时，发出去只会污染云端）。
 - 结果：断网 8 小时恢复后只发 **1 条**（最新），不是 96 条。云端曲线有段空缺是**有意为之**——8 小时无心跳本来就是掉线状态。
 - 退避：初始 30s → ×2 → 上限 15 分钟，±20% 抖动；任意成功即重置。
-- 失败分类：`401/403` 凭据失效**不重试**（UI 提示重填）；`400/422` 契约错误**不重试**（写调试日志）；`429` 按 `Retry-After`；`5xx`/IOException 退避重试。
+- 失败分类：`401/403` 凭据失效**不重试**（UI 提示重填）；`400/415` 契约错误**不重试**（写调试日志）；`429` 按 `Retry-After`；`5xx`/IOException 退避重试。
 
 ### 9.6 权限清单
 
-**需要**：`INTERNET`、`ACCESS_NETWORK_STATE`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`（非 FGS 前置，仅通知可见性）、`RECEIVE_BOOT_COMPLETED`、`SCHEDULE_EXACT_ALARM`（特殊权限，用户手动开）、`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`、`WAKE_LOCK`。
+**需要**：`INTERNET`、`ACCESS_NETWORK_STATE`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`（非 FGS 前置，仅通知可见性）、`RECEIVE_BOOT_COMPLETED`、`SCHEDULE_EXACT_ALARM`（特殊权限，用户手动开）、`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`。
+
+**已声明但未使用（预留）**：`WAKE_LOCK`——上报是短请求，不需要持锁；留在 Manifest 里只为将来若引入长时间后台任务。
 
 **不要**：`USE_EXACT_ALARM`（仅闹钟/日历类合规）、`ACCESS_BACKGROUND_LOCATION`、`CAMERA`、`RECORD_AUDIO`、`BODY_SENSORS`、`QUERY_ALL_PACKAGES`、`SYSTEM_ALERT_WINDOW`、`FOREGROUND_SERVICE_DATA_SYNC`。
 
@@ -337,6 +339,7 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
 - 品牌名 `translatable="false"`；`app_name` 跟随语言（中文系统显「雨晴Status」，其他显 `RainyStatus`）。
 - **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定，回退 `zh-Hans`；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。
 - 网页诚实标注新鲜度：`<60s` →「刚刚」；`<60min` →「N 分钟前」；否则「N 小时 M 分钟前」。页脚注明「数据最多可能滞后约 1 分钟」。
+- **网页时间的时区**：默认 `TIMEZONE_OFFSET_MINUTES=auto` → 用**访客浏览器所在时区**渲染（`new Date()` 本地读数），页脚同时标注当前生效偏移（如 `UTC+08:00`）。填数字偏移则固定时区、所有人同一时钟。**服务端与 App 传递的时间一律是 epoch 毫秒 UTC**，时区只影响展示，不影响任何判定。
 
 ---
 

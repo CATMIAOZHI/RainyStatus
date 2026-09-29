@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # 同时认 main 与 master：远端默认分支改名时不会让 CI 静默失效
+    branches: [main, master]
   pull_request:
 
 permissions:

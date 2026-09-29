@@ -31,6 +31,8 @@ const I18N = {
     offlineFor: '已掉线 {d}',
     offlineHint: '超过 {n} 分钟没有心跳就会显示掉线',
     freshnessHint: '数据来自手机定时上报，最多可能滞后约 1 分钟。',
+    tzAuto: '本页时间按你的时区显示（{tz}）',
+    tzFixed: '本页时间按固定时区显示（{tz}）',
     refreshedAt: '本页刷新于 {t}',
     loadFailed: '无法读取状态，请稍后重试',
     neverSeen: '从未上报',
@@ -62,6 +64,8 @@ const I18N = {
     offlineFor: '已離線 {d}',
     offlineHint: '超過 {n} 分鐘沒有心跳就會顯示離線',
     freshnessHint: '資料來自手機定時上報，最多可能延遲約 1 分鐘。',
+    tzAuto: '本頁時間依你的時區顯示（{tz}）',
+    tzFixed: '本頁時間依固定時區顯示（{tz}）',
     refreshedAt: '本頁重新整理於 {t}',
     loadFailed: '無法讀取狀態，請稍後重試',
     neverSeen: '從未上報',
@@ -93,6 +97,8 @@ const I18N = {
     offlineFor: 'Offline for {d}',
     offlineHint: 'Shows offline after {n} minutes without a heartbeat',
     freshnessHint: 'Reported by the phone on a timer; may lag up to ~1 minute.',
+    tzAuto: 'Times are shown in your timezone ({tz})',
+    tzFixed: 'Times are shown in a fixed timezone ({tz})',
     refreshedAt: 'Refreshed at {t}',
     loadFailed: 'Could not load status, please retry',
     neverSeen: 'never reported',
@@ -154,12 +160,56 @@ function formatDuration(ms) {
   return t('daysAgo', { n: Math.floor(hours / 24) });
 }
 
+/**
+ * 时间格式化。
+ *
+ * 时区策略：
+ * - `site.timezoneOffsetMinutes === null`（默认）→ 用**访客浏览器自己的时区**渲染，
+ *   访客看到的是「自己钟表上的时间」，不需要任何配置。
+ * - 数字 → 固定时区偏移（分钟），所有人看到同一时钟（由部署者显式配置时使用）。
+ *
+ * 注意：这里刻意不用 `toLocaleString` —— 它受浏览器 locale 影响，位数与分隔符不稳定；
+ * 手工 pad 能保证 `YYYY-MM-DD HH:mm` 在任何语言/地区下都长一样。
+ */
 function formatClock(epochMs) {
-  const offset = site?.timezoneOffsetMinutes ?? 480;
-  const d = new Date(epochMs + offset * 60000);
+  const fixedOffset = site?.timezoneOffsetMinutes;
+  const d = new Date(epochMs);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+
+  if (typeof fixedOffset === 'number' && Number.isFinite(fixedOffset)) {
+    // 固定时区：把 epoch 平移后再按 UTC 读数
+    const shifted = new Date(epochMs + fixedOffset * 60000);
+    return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())} ` +
+      `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
+  }
+
+  // 访客本地时区
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 当前生效的 UTC 偏移（分钟）；固定时区用配置值，否则取访客本地 */ 
+function effectiveOffsetMinutes() {
+  const fixedOffset = site?.timezoneOffsetMinutes;
+  if (typeof fixedOffset === 'number' && Number.isFinite(fixedOffset)) return fixedOffset;
+  // getTimezoneOffset() 返回「UTC - 本地」的分钟数（东八区为 -480），符号相反
+  return -new Date().getTimezoneOffset();
+}
+
+/** 形如 `UTC+08:00` / `UTC-03:30` */
+function formatOffset(minutes) {
+  const sign = minutes < 0 ? '-' : '+';
+  const abs = Math.abs(minutes);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
+/** 页脚说明：时间到底按哪个时区显示的（避免访客误读） */
+function timezoneNote() {
+  const fixedOffset = site?.timezoneOffsetMinutes;
+  const tz = formatOffset(effectiveOffsetMinutes());
+  const isFixed = typeof fixedOffset === 'number' && Number.isFinite(fixedOffset);
+  return isFixed ? t('tzFixed', { tz }) : t('tzAuto', { tz });
 }
 
 function setText(node, text) {
@@ -174,6 +224,7 @@ function applyStaticI18n() {
   setText(el('metaDeviceLabel'), t('device'));
   setText(el('metaLastSeenLabel'), t('lastSeen'));
   setText(el('freshnessHint'), t('freshnessHint'));
+  setText(el('timezoneNote'), timezoneNote());
   document.documentElement.lang = lang;
 
   for (const btn of document.querySelectorAll('.lang-btn')) {
@@ -299,6 +350,8 @@ function render(data) {
 
   const now = new Date();
   setText(el('refreshedAt'), t('refreshedAt', { t: formatClock(now.getTime()) }));
+  // site 配置是首次响应才拿到的，时区说明必须在这里再刷一次
+  setText(el('timezoneNote'), timezoneNote());
 
   const hint = el('freshnessHint');
   if (lastSeenAt !== null && !data.online) {

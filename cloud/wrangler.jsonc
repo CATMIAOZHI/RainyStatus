@@ -13,7 +13,7 @@
   "compatibility_date": "2026-09-30",
 
   // 默认暴露 *.workers.dev 子域（人人可用，不依赖自有域名）。
-  // 想绑定自己的域名，见本文件末尾注释与 cloud/README.md。
+  // 想绑定自己的域名，见本文件末尾注释与根目录 README.md 的部署章节。
   "workers_dev": true,
 
   // 静态资源（网页）—— Cloudflare 官方：static assets 请求免费且不限量。
@@ -43,7 +43,7 @@
     "SHOW_TEMPERATURE": "false",
     "SHOW_NETWORK": "false",
     "SHOW_MOOD": "true",
-    "TIMEZONE_OFFSET_MINUTES": "480",
+    "TIMEZONE_OFFSET_MINUTES": "auto",
     "DEFAULT_LANG": "zh-Hans"
   },
 

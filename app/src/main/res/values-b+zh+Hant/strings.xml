@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌名不翻譯 -->
+    <string name="brand_name" translatable="false">RainyStatus</string>
+    <string name="app_name">雨晴Status</string>
+    <string name="app_tagline">電量與心跳即時上報</string>
+</resources>

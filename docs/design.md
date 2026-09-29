@@ -1,0 +1,379 @@
+# 雨晴Status · 设计方案
+
+> 状态：**方案已定稿，待水晴喵确认部署凭据后开工**
+> 最后更新：2026-09-30
+
+---
+
+## 1. 一句话定位
+
+Android App 常驻后台，定时把手机电量 / 充电状态 / 在线心跳上报到自己的服务器；自有域名下一个公开网页，任何人打开就能看到「电量多少、人还在不在」。
+
+---
+
+## 2. 架构
+
+```
+Redmi K80 Pro                      Cloudflare                       访客
+┌──────────────┐                ┌──────────────────┐            ┌────────┐
+│ RainyStatus  │  每 10 分钟     │ Worker           │  HTTPS GET │ 浏览器 │
+│ 前台服务      │ ──HTTPS POST──▶│ status.<域名>     │◀──────────│        │
+│ 电量/充电/心跳 │  Bearer Token  │                  │            └────────┘
+└──────────────┘                │  ┌────────────┐  │
+                                │  │ Workers KV │  │
+                                │  │ device_status │
+                                │  │ current_mood  │
+                                │  └────────────┘  │
+                                │  GET /   → 静态网页（免费不限量）
+                                │  GET  /api/status
+                                │  POST /api/heartbeat
+                                │  POST /api/mood
+                                └──────────────────┘
+```
+
+- 云端只用了 **1 个 Worker + 1 个 KV namespace + 1 个静态资源目录**，无数据库、无服务器。
+- 公开网页做成 **静态资源**（Cloudflare 官方：*Requests to static assets are free and unlimited*）→ 网页浏览量不吃任何额度；即使免费额度耗尽（错误码 `1027`），**网页照常打开、只有 API 报错**。
+- v1 **不引入 D1**；电量曲线 / 心情时间线留到 v2。
+
+---
+
+## 3. 参数与额度
+
+| 项 | 值 |
+|---|---|
+| 心跳间隔 | **10 分钟**（默认，可配置 60 / 300 / 600 / 900 秒） |
+| 每天心跳写入 | **144 次** |
+| KV 免费写额度 | 1,000 / 天（**账号级**，UTC 00:00 重置） |
+| 占用比 | **14.4%** |
+| 心情写入 | 仅在内容变化时（≈0–10 / 天） |
+| 掉线判定阈值 | **30 分钟**无心跳 → 显示「已掉线」+ 掉线时长 |
+| 写预算硬兜底 | App 内记 `writesToday`，超过 **600** 自动降频到 15 分钟并在首页提示 |
+| 实时性 | 数据新鲜度 = 心跳间隔（≤10 分钟）+ KV 读缓存（`cacheTtl` 可设 **30 秒**，最小 30） |
+
+**账号级额度提醒**：KV 的 1,000 写 / 天与 100,000 请求 / 天都是 **整个 Cloudflare 账号共享**的，同账号下其他项目也在扣。若将来额度紧张，可迁 Durable Objects（免费版已可用，强一致，写 SQLite 不占 KV 写额度）或升 Workers Paid（$5/月，KV 写 100 万/月）。
+
+---
+
+## 4. 接口契约（App ↔ Worker 唯一耦合点）
+
+**时间统一**：所有时间戳为 **epoch 毫秒（UTC，整数）**。`lastSeenAt` **由服务端 `Date.now()` 生成**——绝不拿客户端时间判掉线。在线/掉线**在读取时计算**。
+
+### `GET /api/status` → 200
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": 1759212000000,
+  "online": true,
+  "offlineThresholdMs": 1800000,
+  "lastSeenAt": 1759211880000,
+  "offlineForMs": 0,
+  "device": {
+    "batteryPercent": 87,
+    "charging": true,
+    "chargeSource": "ac",
+    "temperatureC": 31.5,
+    "network": "wifi",
+    "deviceName": "WaterRainCat-Phone",
+    "appVersion": "1.0.0"
+  },
+  "mood": { "text": "困了喵…", "emoji": "😴", "updatedAt": 1759200000000 }
+}
+```
+
+- 无数据时 `device: null` / `mood: null`（前端显示「还没有收到过任何心跳」）。
+- 可选字段缺失即 `null`。
+
+### `POST /api/heartbeat`（需 `Authorization: Bearer <TOKEN>`）
+
+```json
+{ "schemaVersion": 1, "batteryPercent": 87, "charging": true,
+  "chargeSource": "ac", "temperatureC": 31.5, "network": "wifi",
+  "clientTs": 1759211879500, "deviceName": "WaterRainCat-Phone",
+  "appVersion": "1.0.0" }
+```
+→ `{ "ok": true, "receivedAt": 1759211880000, "nextExpectedInMs": 600000 }`
+
+### `POST /api/mood`（需 Bearer）
+
+```json
+{ "schemaVersion": 1, "text": "困了喵…", "emoji": "😴" }
+```
+→ `{ "ok": true, "updatedAt": 1759200000500 }`（`text` ≤ 140 码点，`emoji` ≤ 8 字符）
+
+### `GET /api/health` → Worker 自身存活（与设备存活无关）
+
+### 错误码（统一 `{ ok:false, error:{ code, message } }`）
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | `invalid_json` / `invalid_payload` | 解析失败 / 字段越界 |
+| 401 | `unauthorized` | 缺 token / token 不符 |
+| 405 | `method_not_allowed` | 方法不在白名单 |
+| 413 | `payload_too_large` | body > 4 KB |
+| 415 | `unsupported_media_type` | 非 `application/json` |
+| 429 | `rate_limited` | 限流 / KV 同 key 写频限（1 次/秒） |
+| 500 | `internal_error` | KV 异常（含写额度耗尽） |
+
+---
+
+## 5. KV 设计
+
+| key | 内容 | 写入频率 | TTL |
+|---|---|---|---|
+| `device_status` | 最近一次心跳的完整快照 | 144 / 天 | **不设 TTL** |
+| `current_mood` | `{ schemaVersion, text, emoji, updatedAt }` | 内容变化时 | **不设 TTL** |
+
+**为什么绝不能用 TTL**：`expirationTtl` 最小 60 秒，一旦过期 key 消失，`lastSeenAt` 就没了，**掉线时间无法计算**，网页会退化成「没有数据」。1 KB 占用 vs 1 GB 额度，宁可永久留存。
+
+**写入策略**
+1. 心跳恒定按间隔写，**不做「值没变就不写」的省写优化**——那会让掉线检测粒度变差。
+2. 心情去重放 **App 端**（记住上次发送内容，没变不发），服务端不做「读-比较-再写」。
+3. 幂等 = last-write-wins，服务端不加守卫；客户端重试带同一 `clientTs` + `seq`，重复覆盖无害。
+4. 重试必须指数退避、最短间隔 ≥ 1 秒，避免撞同 key 写频限（1 次/秒）→ 429。
+5. `schemaVersion` 放 value 内，key 名保持稳定；v2 大改时写 `device_status_v2` 平滑迁移。
+6. **负缓存坑**：key 不存在时的「not found」也会被缓存 30–60 秒 → 首次部署后第一次心跳写完，网页可能仍显示「无数据」约 1 分钟，不是 bug。
+7. 读合并：`KV.get(["device_status","current_mood"], {cacheTtl:30})`。
+
+---
+
+## 6. 安全设计
+
+| 项 | 方案 |
+|---|---|
+| 鉴权 | `Authorization: Bearer <TOKEN>`；token ≥ 32 字节随机（`openssl rand -base64 48`）；**常数时间比较**防时序侧信道 |
+| secret 存放 | `wrangler secret put AUTH_TOKEN`（加密、只写不可读）；**绝不放** `vars`、仓库、Android 源码 |
+| App 侧 | token 存设置页输入 + DataStore；`android:allowBackup="false"` |
+| 部署凭据 | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` 走环境变量；`cloud/.dev.vars` 必须 gitignore |
+| 请求体 | 先查 `Content-Length` ≤ 4096，再按文本长度二次校验后 `JSON.parse` |
+| 字段校验 | 严格白名单 + 范围：`batteryPercent` 整数 0–100；`charging` bool；`chargeSource ∈ {ac,usb,wireless,none}`；`temperatureC` −50–200；**未知字段直接拒绝** |
+| 失效快 | **先验 token 再碰 KV**，非法请求 0 KV 成本 |
+| 边缘限流 | 免费版仅 1 条 Rate Limiting 规则（表达式字段只有 Path / Verified Bot，计数特征只有 IP）：`/api/heartbeat` → 30 次/分钟/IP → block 60s |
+| 收敛面 | `workers_dev: false`，只暴露自定义域，减少 `*.workers.dev` 被扫描 |
+| CORS | 网页与 API **同源** → **完全不发 CORS 头**（尤其不写 `Access-Control-Allow-Origin: *`），顺带挡掉浏览器跨域调用；非浏览器客户端由 token 挡 |
+| 隐私边界 | 只存 电量/充电/温度/心情/时间戳/App 版本/设备名。**不采集、不持久化** IP、地理位置、SSID、IMEI。Worker 代码**禁止**把 `cf-connecting-ip` 写入 KV |
+| 公开性提醒 | 心情文案与设备名是**全世界可见**的 |
+| token 泄露处置 | `wrangler secret put AUTH_TOKEN` 立刻替换 → 旧 token 即刻失效（无宽限期）；同时吊销 CF API Token |
+
+**XSS**：网页渲染心情/设备名一律用 `textContent`，**禁止 `innerHTML`**。
+
+---
+
+## 7. 多用户支持（「给别人用」）
+
+### 核心结论：**每人部署自己的实例，不共用一台**
+
+原因：KV 写额度是 **Cloudflare 账号级**的 1,000 写/天。如果所有人上报到 `status.WaterRainCat.com`，144 写/天 × N 人，**约 6 人就会打爆**，而且一个 token 泄露就是所有人受影响。因此**共享单实例在免费额度下不可行**。
+
+### 模式 A（默认，推荐）：一键自部署
+
+README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核实）：
+
+```
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/CATMIAOZHI/RainyStatus/tree/main/cloud)
+```
+
+点击后 Cloudflare 会：克隆仓库到用户自己的 GitHub → **自动创建并绑定 KV namespace**（官方支持的自动 provision 资源类型包含 KV）→ 用 Workers Builds 构建部署。全程不需要本地环境。
+
+- 每个用户花自己的额度 → 各自独立，互不影响。
+- App 端只需填「自己的 Worker 地址 + 自己的 Token」。
+- 无自有域名也能用（默认 `*.workers.dev` 子域）。
+
+### 模式 B（可选，v2）：单实例多设备
+
+若确实想做「一台实例服务多台设备」，需要：
+1. KV key 加设备前缀：`device_status:<deviceId>`、`current_mood:<deviceId>`；
+2. 每设备独立 token（`DEVICE_TOKENS` 作为 JSON secret，或 `token:<deviceId>` 存 KV）；
+3. 网页支持 `?device=<id>` 选择或并排展示；
+4. **必须升级 Workers Paid**（$5/月，KV 写 100 万/月），否则 7 人以上就会失败。
+
+> v1 只实现模式 A；模式 B 的记录留在此处，避免将来重复评估。
+
+---
+
+## 8. App 自定义设置（完整清单）
+
+### 8.1 用户可配置项（App 内「设置」页）
+
+| 分组 | 项 | 类型 / 默认 | 说明 |
+|---|---|---|---|
+| **服务器** | 上报地址 Endpoint | 文本，必填，默认空 | 用户自己的 Worker 地址（`https://xxx.workers.dev` 或自有域名）；保存前做 URL 与 scheme 校验，只允许 https |
+| | 设备 Token | 文本，必填，默认空 | 与 Worker 的 `AUTH_TOKEN` 一致；输入框做遮挡 + 显隐切换 |
+| | 连接测试 | 按钮 | 点一下发一次心跳，立刻显示 HTTP 状态码与结果，避免用户填错后盲等 |
+| **上报** | 启用常驻上报 | 开关，默认关 | 首次安装默认关，配好服务器再开 |
+| | 上报间隔 | 单选 60 / 300 / **600** / 900 秒 | < 300 秒的选项标注「仅在亮屏时生效」（Doze 下精确闹钟最低约 9 分钟） |
+| | 开机自启 | 开关，默认开 | `BOOT_COMPLETED` |
+| | 立即上报 | 按钮 | 手动触发一次，绕过节流 |
+| **上报字段** | 电量百分比 | 开关，默认开 | 关掉后网页不显示电量 |
+| | 充电状态 | 开关，默认开 | |
+| | 电池温度 | 开关，默认**关** | 隐私更保守的默认值 |
+| | 网络类型 | 开关，默认**关** | 同上 |
+| | 设备名称 | 文本，默认空 | 留空则网页不显示；**注意全世界可见** |
+| **心情** | 启用心情 | 开关，默认开 | 关闭后隐藏首页心情卡片 |
+| | 心情文案 | 多行文本 | 本地落草稿（debounce 500ms），防误触丢失 |
+| **保活** | 电池优化白名单 | 状态 + 引导按钮 | 未加白时首页显示黄色提示 |
+| | 精确闹钟 | 状态 + 引导按钮 | Android 14+ 默认拒绝 |
+| | HyperOS 自启动 | 图文引导卡片 | 跳「设置 → 应用 → 自启动管理」等 |
+| **通知** | 常驻通知 | 开关，默认开 | 关掉只改可见性策略，前台服务仍必须带通知 |
+| **语言** | 界面语言 | 跟随系统 / 简体 / 繁體 / English | 复用 RainyToken 的 `LocaleManager` 逻辑 |
+| **调试** | 调试日志 | 页面入口 | 记录每次上报的触发源、耗时、响应码、退避、降频 |
+| **关于** | 版本 | 只读 | `BuildConfig.VERSION_NAME` |
+| | 本项目地址 | 按钮 | 跳 GitHub |
+
+### 8.2 云端可配置项（`cloud/wrangler.jsonc` 的 `vars`）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `SITE_TITLE` | `RainyStatus` | 网页标题 |
+| `OWNER_NAME` | `WaterRainCat` | 网页上显示的主人名字 |
+| `AVATAR_EMOJI` | `☔` | 头像字符 |
+| `OFFLINE_THRESHOLD_MS` | `1800000` | 掉线阈值（30 分钟） |
+| `SHOW_TEMPERATURE` | `false` | 网页是否展示温度（即使上报了也可隐藏） |
+| `SHOW_NETWORK` | `false` | 同上 |
+| `SHOW_MOOD` | `true` | 是否展示心情 |
+| `TIMEZONE_OFFSET_MINUTES` | `480` | 页面展示时区（默认 UTC+8） |
+| `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en` |
+| `REQUIRE_VIEW_PASSWORD` | `false` | 可选：网页访问口令（v1 预留，默认关闭） |
+
+这些变量在 Deploy to Cloudflare 的配置页里可被用户直接改，也会写回他们自己的仓库。
+
+### 8.3 设计原则
+
+- **App 不硬编码任何地址和 token** —— 换服务器只需改设置，不用重装。
+- **云端不硬编码任何个人信息** —— 名字、标题、emoji 全走 `vars`，别人部署后看到的是自己的。
+- **默认值保守** —— 温度/网络/设备名默认不上报，用户主动开启才采。
+- **不申请无关权限** —— 见第 9 节。
+
+---
+
+## 9. Android 端设计
+
+### 9.1 工程骨架（与 RainyToken 同构）
+
+| 项 | 取值 |
+|---|---|
+| namespace / applicationId | `com.rainy.status` |
+| compileSdk / targetSdk / minSdk | 35 / 35 / 31 |
+| JVM / Gradle wrapper | 17 / 9.1.0 |
+| AGP / Kotlin / KSP / Hilt | 9.0.0 / 2.3.10 / 2.3.9 / 2.59.2 |
+| Compose BOM / DataStore | 2024.10.01 / 1.1.1 |
+| 网络 | OkHttp 4.12.0 + kotlinx-serialization 1.7.3（只有一个上报 + 一个心情端点，**不上 Retrofit**） |
+
+**v1 明确不需要**：Room（离线队列压成「最多一条待发」用 DataStore 足够，省 KSP 编译开销与迁移成本）、WebKit、Firebase/FCM。
+
+**必须复刻 RainyToken 的两段 ARM64 proot workaround**（`aapt2` 强制 `linux-aarch64` + `guardReleaseResources`），否则 Release APK 会静默缺资源。
+
+### 9.2 前台服务类型：`specialUse`（不是 `dataSync`）
+
+**关键坑**：Android 15 起 `dataSync` 类型的 FGS 在 24 小时内**累计只能跑 6 小时**，超时回调 `Service.onTimeout()` 要求几秒内 `stopSelf()`，否则抛 `RemoteServiceException`。常驻心跳必然触发。
+
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+<service
+    android:name=".service.StatusHeartbeatService"
+    android:exported="false"
+    android:foregroundServiceType="specialUse">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Periodic device battery and presence heartbeat to the user's own status dashboard" />
+</service>
+```
+
+选它的理由：① 不在 6 小时超时名单；② **不在** Android 15 的 BOOT_COMPLETED 禁启动名单（名单只有 `dataSync`/`camera`/`mediaPlayback`/`phoneCall`/`mediaProjection`/`microphone`）；③ 无运行时权限前置条件。
+
+### 9.3 定时：三通道互补
+
+| 通道 | 机制 | 生效场景 |
+|---|---|---|
+| **A** | FGS 内协程 `delay` 循环（用 `SystemClock.elapsedRealtime()` 校正漂移） | 亮屏 / 设备活跃 —— 最准时 |
+| **B** | `AlarmManager.setExactAndAllowWhileIdle`（一次性自续，非 `setRepeating`） | 息屏 / Doze —— 但同应用**最低约 9 分钟**、低电耗模式可拉长到 ~15 分钟 |
+| **C** | 事件即时上报 | 充电插入/拔出（无条件）、解锁、网络恢复、开机 |
+
+- `canScheduleExactAlarms() == false` 时降级 `setAndAllowWhileIdle` 并在 UI 提示。
+- WorkManager **仅作兜底**：周期 30 分钟 + `NetworkType.CONNECTED` + `ExistingPeriodicWorkPolicy.KEEP`（周期最小 15 分钟，且 Doze 下 JobScheduler 全停，不能当主方案）。
+- 上报期间短持 `PARTIAL_WAKE_LOCK`（`withTimeoutOrNull(30s)` 包裹），**不常驻**。
+
+### 9.4 事件触发节流（防打爆 KV）
+
+| 事件 | 行为 |
+|---|---|
+| 充电插入 / 拔出 | **立即上报**（低频、语义重要，不受节流） |
+| 电量变化 | **Δ% ≥ 3 且距上次 ≥ 120s** 才发，否则只更新本地状态 |
+| 屏幕点亮 / 解锁 | 距上次成功上报 ≥ 间隔时补一次 |
+| 网络恢复 | 队列有待发 → 立即冲刷 |
+
+### 9.5 离线队列（压成「只剩最新一条」）
+
+```kotlin
+@Serializable
+data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long, val attempts: Int)
+```
+
+- 入队规则：已有待发时，**无意义差异**（电量差 < 1%、充电状态未翻转、无心情）→ 丢弃新的；**有意义差异** → 用新的**替换**旧的（旧电量已过时，发出去只会污染云端）。
+- 结果：断网 8 小时恢复后只发 **1 条**（最新），不是 96 条。云端曲线有段空缺是**有意为之**——8 小时无心跳本来就是掉线状态。
+- 退避：初始 30s → ×2 → 上限 15 分钟，±20% 抖动；任意成功即重置。
+- 失败分类：`401/403` 凭据失效**不重试**（UI 提示重填）；`400/422` 契约错误**不重试**（写调试日志）；`429` 按 `Retry-After`；`5xx`/IOException 退避重试。
+
+### 9.6 权限清单
+
+**需要**：`INTERNET`、`ACCESS_NETWORK_STATE`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`（非 FGS 前置，仅通知可见性）、`RECEIVE_BOOT_COMPLETED`、`SCHEDULE_EXACT_ALARM`（特殊权限，用户手动开）、`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`、`WAKE_LOCK`。
+
+**不要**：`USE_EXACT_ALARM`（仅闹钟/日历类合规）、`ACCESS_BACKGROUND_LOCATION`、`CAMERA`、`RECORD_AUDIO`、`BODY_SENSORS`、`QUERY_ALL_PACKAGES`、`SYSTEM_ALERT_WINDOW`、`FOREGROUND_SERVICE_DATA_SYNC`。
+
+### 9.7 真实风险：HyperOS 杀后台
+
+用户 build、非 root 下**无法根治**。缓解手段：FGS + 电池白名单 + 自启动 + 任务卡加锁 + 闹钟兜底。**必须接受「偶尔漏心跳、甚至连续几小时无心跳」的现实**——云端的 30 分钟阈值给了容错窗口（漏 2 次不判掉线，漏 4 次才判）。
+
+---
+
+## 10. 三语与文案
+
+- 资源目录（AGP 9 不接受 `values-zh-Hans`，必须 BCP-47 写法）：
+  - `values/` → 英文（fallback，`unqualifiedResLocale=en`）
+  - `values-b+zh+Hans/` → 简体
+  - `values-b+zh+Hant/` → 繁體
+- 品牌名 `translatable="false"`；`app_name` 跟随语言（中文系统显「雨晴Status」，其他显 `RainyStatus`）。
+- **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定，回退 `zh-Hans`；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。
+- 网页诚实标注新鲜度：`<60s` →「刚刚」；`<60min` →「N 分钟前」；否则「N 小时 M 分钟前」。页脚注明「数据最多可能滞后约 1 分钟」。
+
+---
+
+## 11. 仓库结构
+
+```
+RainyStatus/
+├── app/                          # Android 模块
+├── cloud/
+│   ├── wrangler.jsonc
+│   ├── src/
+│   │   ├── index.ts              # 路由分发 + 错误兜底
+│   │   ├── routes/{status,heartbeat,mood,health}.ts
+│   │   ├── lib/{kv,auth,validate,response}.ts
+│   │   └── types.ts
+│   ├── public/                   # 静态网页（免费不限量）
+│   │   ├── index.html  app.js  style.css  _headers
+│   ├── .dev.vars.example
+│   └── package.json
+├── docs/design.md                # 本文件
+├── docs/api.md                   # 接口契约
+├── .github/workflows/ci.yml      # 单测 + lint + 构建 + Worker dry-run
+├── .github/workflows/release.yml # tag v* 触发
+├── README.md / README.en.md
+├── AGENTS.md / taste.md / LICENSE
+```
+
+---
+
+## 12. 待决策清单
+
+| # | 决策点 | 建议 |
+|---|---|---|
+| D1 | Cloudflare API Token（部署用） | 官方模板 **Edit Cloudflare Workers**，资源范围限本账号 + `waterraincat.com` |
+| D2 | 首版版本号 | `versionCode 1` / `versionName "1.0.0"`，由水晴喵定 |
+| D3 | 保活权限是否引导（电池白名单 + 精确闹钟） | **需要**，不加白名单红米上 10 分钟精度做不到；仅影响 Google Play 上架场景 |
+| D4 | 公开字段边界 | 温度 / 网络 / 设备名默认**关**，用户主动开 |
+| D5 | 是否允许提交现有骨架 | 需水晴喵点头 |
+| D6 | 是否上架 Google Play | 自用分发则 `specialUse` 零顾虑；上架需 FGS 声明 + 演示视频 |
+| D7 | 模式 B（单实例多设备）是否要做 | v1 不做；要做需升 Workers Paid |

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 雨晴Status 单色图标（主题图标 / Themed icon 用） -->
+<!-- 电池用描边而非填充，这样心跳线在单色渲染下依然是镂空的、可辨认 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M46,32 L62,32 Q71,32 71,41 L71,71 Q71,80 62,80 L46,80 Q37,80 37,71 L37,41 Q37,32 46,32 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:fillColor="@android:color/transparent" />
+
+    <path
+        android:pathData="M51,25 L57,25 Q59,25 59,27 L59,30 Q59,32 57,32 L51,32 Q49,32 49,30 L49,27 Q49,25 51,25 Z"
+        android:fillColor="#FFFFFF" />
+
+</vector>

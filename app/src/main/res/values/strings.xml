@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 默认语言：英文（国际回退）。中文系统的资源在 values-b+zh+Hans / values-b+zh+Hant -->
+<resources>
+    <!-- 品牌名不翻译 -->
+    <string name="brand_name" translatable="false">RainyStatus</string>
+    <string name="app_name">RainyStatus</string>
+    <string name="app_tagline">Live battery &amp; heartbeat</string>
+</resources>

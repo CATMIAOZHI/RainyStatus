@@ -1,7 +1,171 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 品牌名不翻译 -->
-    <string name="brand_name" translatable="false">RainyStatus</string>
+    <!-- ══════════ 品牌 ══════════ -->
     <string name="app_name">雨晴Status</string>
-    <string name="app_tagline">电量与心跳实时上报</string>
+
+    <!-- ══════════ 通用动作 ══════════ -->
+    <string name="action_cancel">取消</string>
+    <string name="action_ok">确定</string>
+    <string name="action_clear">清空</string>
+    <string name="action_back">返回</string>
+    <string name="action_test">连接测试</string>
+    <string name="action_testing">测试中…</string>
+    <string name="action_report_now">立即上报</string>
+
+    <!-- ══════════ 首页 ══════════ -->
+    <string name="home_title">状态</string>
+    <string name="home_battery_hidden">电量百分比已在设置里关闭，不会上报。</string>
+    <string name="home_charging">充电中</string>
+    <string name="home_charging_unknown">—</string>
+    <string name="home_not_charging">未充电</string>
+    <string name="home_charge_source_ac">电源适配器</string>
+    <string name="home_charge_source_usb">USB</string>
+    <string name="home_charge_source_wireless">无线充电</string>
+    <string name="home_temperature">电池温度</string>
+    <string name="home_temperature_value">%1$.1f °C</string>
+    <string name="home_network">网络</string>
+    <string name="home_network_wifi">Wi-Fi</string>
+    <string name="home_network_cellular">移动数据</string>
+    <string name="home_network_ethernet">有线网络</string>
+    <string name="home_network_none">无网络</string>
+    <string name="home_network_unknown">未知</string>
+    <string name="home_last_success">上次上报</string>
+    <string name="home_never_reported">从未上报</string>
+    <string name="home_service_stopped">后台服务已停止</string>
+    <string name="home_report_success">上报成功</string>
+    <string name="home_report_failed">上报失败：%1$s</string>
+    <string name="home_state_ok">正常</string>
+    <string name="home_state_auth_error">Token 被拒绝，请检查设置</string>
+    <string name="home_state_not_configured">尚未配置</string>
+    <string name="home_state_throttled">已触发每日额度保护，自动降频</string>
+    <string name="home_mood_title">现在的心情</string>
+    <string name="home_mood_hint">在做什么呢？</string>
+    <string name="home_mood_send">发送</string>
+    <string name="home_mood_sent">心情已更新</string>
+    <string name="home_mood_too_long">太长了（最多 %1$d 个字符）</string>
+    <string name="home_mood_empty">先写点什么吧</string>
+    <string name="home_mood_disabled">心情分享已在设置中关闭</string>
+    <string name="home_keepalive_title">保活检查</string>
+    <string name="home_keepalive_battery">电池优化白名单</string>
+    <string name="home_keepalive_battery_ok">已加入，很好</string>
+    <string name="home_keepalive_battery_no">未加入，上报可能被延迟</string>
+    <string name="home_keepalive_alarm">精确闹钟</string>
+    <string name="home_keepalive_alarm_ok">已授权</string>
+    <string name="home_keepalive_alarm_no">未授权，息屏后间隔会漂移</string>
+    <string name="home_keepalive_notification">通知权限</string>
+    <string name="home_keepalive_notification_ok">已授权</string>
+    <string name="home_keepalive_notification_no">未授权，常驻通知不可见</string>
+    <string name="home_keepalive_hint">小米 / HyperOS 还需开启「自启动」并在多任务卡片里加锁。不加入白名单的话，10 分钟精度无法保证。</string>
+    <string name="home_view_page">查看状态页</string>
+    <string name="home_view_page_missing">请先填写上报地址</string>
+
+    <!-- ══════════ 设置 ══════════ -->
+    <string name="settings_title">设置</string>
+    <string name="settings_group_server">服务器</string>
+    <string name="settings_group_report">上报</string>
+    <string name="settings_group_fields">上报字段</string>
+    <string name="settings_group_mood">心情</string>
+    <string name="settings_group_keepalive">保活</string>
+    <string name="settings_group_appearance">外观</string>
+    <string name="settings_group_about">关于</string>
+
+    <string name="settings_endpoint">上报地址</string>
+    <string name="settings_endpoint_hint">https://你的-worker.workers.dev</string>
+    <string name="settings_endpoint_error">请填写有效的 https 地址</string>
+    <string name="settings_endpoint_required">上报地址是必填项</string>
+    <string name="settings_token">设备 Token</string>
+    <string name="settings_token_hint">与 Worker 的 AUTH_TOKEN 一致</string>
+    <string name="settings_token_required">设备 Token 是必填项</string>
+    <string name="settings_token_show">显示 Token</string>
+    <string name="settings_token_hide">隐藏 Token</string>
+    <string name="settings_test_ok">连接成功（HTTP %1$d）</string>
+    <string name="settings_test_unauthorized">Token 被拒绝（HTTP 401），请确认与 AUTH_TOKEN 一致。</string>
+    <string name="settings_test_error">失败：%1$s</string>
+    <string name="settings_test_not_configured">请先填写地址和 Token</string>
+
+    <string name="settings_enabled">后台常驻上报</string>
+    <string name="settings_enabled_hint">由前台服务持续发送心跳</string>
+    <string name="settings_interval">上报间隔</string>
+    <string name="settings_interval_hint">更短的间隔只在亮屏时生效——Doze 模式下 Android 会限制闹钟。</string>
+    <string name="settings_autostart">开机自启</string>
+    <string name="settings_notify">显示常驻通知</string>
+    <string name="settings_notify_hint">前台服务必须保留通知，关闭只是让它静音不打扰。</string>
+    <string name="settings_daily_budget">每日上报上限</string>
+    <string name="settings_daily_budget_value">今日已用 %1$d / %2$d</string>
+    <string name="settings_daily_budget_hint">达到上限后会自动延长间隔，避免把 Cloudflare 免费额度打爆。</string>
+
+    <string name="settings_field_battery">电量百分比</string>
+    <string name="settings_field_charging">充电状态</string>
+    <string name="settings_field_temperature">电池温度</string>
+    <string name="settings_field_network">网络类型</string>
+    <string name="settings_field_device_name">设备名称</string>
+    <string name="settings_device_name_hint">会公开显示在状态页上，留空则不显示。</string>
+    <string name="settings_privacy_hint">这里开启的内容都会公开显示在你的状态页上。IP、位置、Wi-Fi 名称一律不采集。</string>
+
+    <string name="settings_mood_enabled">分享心情</string>
+    <string name="settings_mood_hint">会显示在状态页上，只在你点发送时才上传。</string>
+
+    <string name="settings_keepalive_battery">电池优化白名单</string>
+    <string name="settings_keepalive_alarm">精确闹钟</string>
+    <string name="settings_keepalive_notification">通知权限</string>
+    <string name="settings_keepalive_autostart_app">打开自启动设置</string>
+    <string name="settings_keepalive_autostart_hint">HyperOS / MIUI：设置 → 应用 → 应用管理 → 雨晴Status → 自启动。另外在多任务卡片里下拉加锁，并把省电策略设为「无限制」。</string>
+
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_language">界面语言</string>
+    <string name="settings_language_system">跟随系统</string>
+    <!-- 语言名用母语写法（translatable=false），只在 values/ 里定义一次，避免 lint 的 Untranslatable 警告 -->
+
+    <!-- ══════════ 间隔文案 ══════════ -->
+    <string name="interval_seconds">%1$d 秒</string>
+    <string name="interval_minutes">%1$d 分钟</string>
+
+    <string name="settings_debug_log">调试日志</string>
+    <string name="settings_debug_log_hint">网络请求、重试与服务事件——上报停了的时候很有用</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_project">项目地址</string>
+
+    <!-- ══════════ 调试日志 ══════════ -->
+    <string name="debug_title">调试日志</string>
+    <string name="debug_empty">暂时没有日志</string>
+    <string name="debug_clear_confirm">清空全部日志？</string>
+
+    <!-- ══════════ 通知 ══════════ -->
+    <string name="notification_channel_name">后台上报</string>
+    <string name="notification_channel_desc">保持电量心跳持续上报</string>
+    <string name="notification_channel_name_silent">后台上报（静音）</string>
+    <string name="notification_channel_desc_silent">同一条通知，但不响铃也不震动</string>
+    <string name="notification_title">雨晴Status 运行中</string>
+    <string name="notification_text">电量 %1$d%% · 上次上报 %2$s</string>
+    <string name="notification_text_no_battery">电量 — · 上次上报 %1$s</string>
+    <string name="notification_text_unknown">等待首次上报</string>
+    <string name="notification_action_report">立即上报</string>
+    <string name="notification_action_stop">停止</string>
+
+    <!-- ══════════ 时长 ══════════ -->
+    <string name="duration_just_now">刚刚</string>
+    <string name="duration_minutes">%1$d 分钟前</string>
+    <string name="duration_hours">%1$d 小时 %2$d 分钟前</string>
+    <string name="duration_days">%1$d 天前</string>
+
+    <!-- ══════════ 错误 ══════════ -->
+    <string name="error_no_network">没有网络连接</string>
+    <string name="error_timeout">请求超时</string>
+    <string name="error_unauthorized">Token 被拒绝（HTTP 401）</string>
+    <string name="error_bad_request">服务器拒绝了数据（HTTP %1$d）</string>
+    <string name="error_too_large">上报内容过大（HTTP 413）</string>
+    <string name="error_rate_limited">触发限流（HTTP 429）</string>
+    <string name="error_server">服务器错误（HTTP %1$d）</string>
+    <string name="error_unknown">未知错误，详情见调试日志</string>
+    <!-- ══════════ 无障碍描述 ══════════ -->
+    <string name="cd_battery_progress">电量 %1$d%%</string>
+    <string name="cd_open_settings">打开设置</string>
+
+    <string name="keepalive_action_grant">去授权</string>
+    <string name="keepalive_action_done">已完成</string>
+    <string name="keepalive_state_ok">已授权</string>
+    <string name="keepalive_state_missing">未授权</string>
 </resources>

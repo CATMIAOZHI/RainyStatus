@@ -1,8 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 默认语言：英文（国际回退）。中文系统的资源在 values-b+zh+Hans / values-b+zh+Hant -->
+<!-- 默认（无 qualifier）资源语言：英文（国际回退）。中文资源在 values-b+zh+Hans / values-b+zh+Hant -->
 <resources>
-    <!-- 品牌名不翻译 -->
-    <string name="brand_name" translatable="false">RainyStatus</string>
+    <!-- ══════════ 品牌 ══════════ -->
     <string name="app_name">RainyStatus</string>
-    <string name="app_tagline">Live battery &amp; heartbeat</string>
+
+    <!-- ══════════ 通用动作 ══════════ -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_back">Back</string>
+    <string name="action_test">Test connection</string>
+    <string name="action_testing">Testing…</string>
+    <string name="action_report_now">Report now</string>
+
+    <!-- ══════════ 首页 ══════════ -->
+    <string name="home_title">Status</string>
+    <string name="home_battery_hidden">Battery percentage is turned off in Settings, so it is not reported.</string>
+    <string name="home_charging">Charging</string>
+    <string name="home_charging_unknown">—</string>
+    <string name="home_not_charging">Not charging</string>
+    <string name="home_charge_source_ac">AC charger</string>
+    <string name="home_charge_source_usb">USB</string>
+    <string name="home_charge_source_wireless">Wireless</string>
+    <string name="home_temperature">Battery temperature</string>
+    <string name="home_temperature_value">%1$.1f °C</string>
+    <string name="home_network">Network</string>
+    <string name="home_network_wifi">Wi-Fi</string>
+    <string name="home_network_cellular">Mobile data</string>
+    <string name="home_network_ethernet">Ethernet</string>
+    <string name="home_network_none">Offline</string>
+    <string name="home_network_unknown">Unknown</string>
+    <string name="home_last_success">Last reported</string>
+    <string name="home_never_reported">Never reported</string>
+    <string name="home_service_stopped">Background service stopped</string>
+    <string name="home_report_success">Reported successfully</string>
+    <string name="home_report_failed">Report failed: %1$s</string>
+    <string name="home_state_ok">Healthy</string>
+    <string name="home_state_auth_error">Token rejected — check your token</string>
+    <string name="home_state_not_configured">Not configured yet</string>
+    <string name="home_state_throttled">Daily limit guard active — slowed down</string>
+    <string name="home_mood_title">Current mood</string>
+    <string name="home_mood_hint">What are you up to?</string>
+    <string name="home_mood_send">Send</string>
+    <string name="home_mood_sent">Mood updated</string>
+    <string name="home_mood_too_long">Too long (max %1$d characters)</string>
+    <string name="home_mood_empty">Write something first</string>
+    <string name="home_mood_disabled">Mood sharing is off in Settings</string>
+    <string name="home_keepalive_title">Keep-alive</string>
+    <string name="home_keepalive_battery">Battery optimization whitelist</string>
+    <string name="home_keepalive_battery_ok">Allowed — good</string>
+    <string name="home_keepalive_battery_no">Not allowed — reports may be delayed</string>
+    <string name="home_keepalive_alarm">Exact alarms</string>
+    <string name="home_keepalive_alarm_ok">Granted</string>
+    <string name="home_keepalive_alarm_no">Not granted — screen-off timing will drift</string>
+    <string name="home_keepalive_notification">Notification permission</string>
+    <string name="home_keepalive_notification_ok">Granted</string>
+    <string name="home_keepalive_notification_no">Not granted — the service notification stays hidden</string>
+    <string name="home_keepalive_hint">On Xiaomi / HyperOS, also enable autostart and lock the app in Recents. Without the whitelist, exact 10-minute timing is not achievable.</string>
+    <string name="home_view_page">View status page</string>
+    <string name="home_view_page_missing">Set the server address first</string>
+
+    <!-- ══════════ 设置 ══════════ -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_group_server">Server</string>
+    <string name="settings_group_report">Reporting</string>
+    <string name="settings_group_fields">Reported fields</string>
+    <string name="settings_group_mood">Mood</string>
+    <string name="settings_group_keepalive">Keep-alive</string>
+    <string name="settings_group_appearance">Appearance</string>
+    <string name="settings_group_about">About</string>
+
+    <string name="settings_endpoint">Server address</string>
+    <string name="settings_endpoint_hint">https://your-worker.workers.dev</string>
+    <string name="settings_endpoint_error">Enter a valid https URL</string>
+    <string name="settings_endpoint_required">Server address is required</string>
+    <string name="settings_token">Device token</string>
+    <string name="settings_token_hint">Same value as the AUTH_TOKEN secret</string>
+    <string name="settings_token_required">Device token is required</string>
+    <string name="settings_token_show">Show token</string>
+    <string name="settings_token_hide">Hide token</string>
+    <string name="settings_test_ok">Connected (HTTP %1$d)</string>
+    <string name="settings_test_unauthorized">Token rejected (HTTP 401). Check that it matches the AUTH_TOKEN secret.</string>
+    <string name="settings_test_error">Failed: %1$s</string>
+    <string name="settings_test_not_configured">Fill in the address and token first</string>
+
+    <string name="settings_enabled">Run in background</string>
+    <string name="settings_enabled_hint">A foreground service keeps sending your heartbeat</string>
+    <string name="settings_interval">Report interval</string>
+    <string name="settings_interval_hint">Shorter intervals only apply while the screen is on — Android throttles alarms in Doze mode.</string>
+    <string name="settings_autostart">Start on boot</string>
+    <string name="settings_notify">Show the ongoing notification</string>
+    <string name="settings_notify_hint">A foreground service must keep a notification — turning this off only makes it silent.</string>
+    <string name="settings_daily_budget">Daily report limit</string>
+    <string name="settings_daily_budget_value">%1$d / %2$d used today</string>
+    <string name="settings_daily_budget_hint">When the limit is reached the interval is extended automatically, so the free Cloudflare quota is never exhausted.</string>
+
+    <string name="settings_field_battery">Battery percentage</string>
+    <string name="settings_field_charging">Charging state</string>
+    <string name="settings_field_temperature">Battery temperature</string>
+    <string name="settings_field_network">Network type</string>
+    <string name="settings_field_device_name">Device name</string>
+    <string name="settings_device_name_hint">Shown publicly on the status page. Leave empty to hide.</string>
+    <string name="settings_privacy_hint">Everything you enable here is publicly visible on your status page. Your IP address, location and Wi-Fi name are never collected.</string>
+
+    <string name="settings_mood_enabled">Share mood</string>
+    <string name="settings_mood_hint">Shown on your status page. Only sent when you press send.</string>
+
+    <string name="settings_keepalive_battery">Battery optimization whitelist</string>
+    <string name="settings_keepalive_alarm">Exact alarms</string>
+    <string name="settings_keepalive_notification">Notification permission</string>
+    <string name="settings_keepalive_autostart_app">Open autostart settings</string>
+    <string name="settings_keepalive_autostart_hint">On HyperOS / MIUI: Settings → Apps → Manage apps → RainyStatus → Autostart. Also lock the card in the Recents screen and set battery saver to "No restrictions".</string>
+
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">Follow system</string>
+    <!-- 语言名一律用其母语写法，不随界面语言翻译 -->
+    <string name="settings_language_zh" translatable="false">简体中文</string>
+    <string name="settings_language_zh_hant" translatable="false">繁體中文</string>
+    <string name="settings_language_en" translatable="false">English</string>
+
+    <!-- ══════════ 间隔文案 ══════════ -->
+    <string name="interval_seconds">%1$d s</string>
+    <string name="interval_minutes">%1$d min</string>
+
+    <string name="settings_debug_log">Debug log</string>
+    <string name="settings_debug_log_hint">Network requests, retries and service events — useful when reports seem to stop</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_project">Project page</string>
+
+    <!-- ══════════ 调试日志 ══════════ -->
+    <string name="debug_title">Debug log</string>
+    <string name="debug_empty">Nothing logged yet</string>
+    <string name="debug_clear_confirm">Clear all log entries?</string>
+
+    <!-- ══════════ 通知 ══════════ -->
+    <string name="notification_channel_name">Background reporting</string>
+    <string name="notification_channel_desc">Keeps your battery heartbeat running</string>
+    <string name="notification_channel_name_silent">Background reporting (silent)</string>
+    <string name="notification_channel_desc_silent">Same notification, shown without sound or vibration</string>
+    <string name="notification_title">RainyStatus is running</string>
+    <string name="notification_text">Battery %1$d%% · last reported %2$s</string>
+    <string name="notification_text_no_battery">Battery — · last reported %1$s</string>
+    <string name="notification_text_unknown">Waiting for the first report</string>
+    <string name="notification_action_report">Report now</string>
+    <string name="notification_action_stop">Stop</string>
+
+    <!-- ══════════ 时长 ══════════ -->
+    <string name="duration_just_now">just now</string>
+    <string name="duration_minutes">%1$d min ago</string>
+    <string name="duration_hours">%1$d h %2$d min ago</string>
+    <string name="duration_days">%1$d d ago</string>
+
+    <!-- ══════════ 错误 ══════════ -->
+    <string name="error_no_network">No network connection</string>
+    <string name="error_timeout">Request timed out</string>
+    <string name="error_unauthorized">Token rejected (HTTP 401)</string>
+    <string name="error_bad_request">Server rejected the data (HTTP %1$d)</string>
+    <string name="error_too_large">Report is too large (HTTP 413)</string>
+    <string name="error_rate_limited">Rate limited (HTTP 429)</string>
+    <string name="error_server">Server error (HTTP %1$d)</string>
+    <string name="error_unknown">Unknown error — see the debug log for details</string>
+
+    <!-- ══════════ 无障碍描述 ══════════ -->
+    <string name="cd_battery_progress">Battery level %1$d percent</string>
+    <string name="cd_open_settings">Open settings</string>
+
+    <!-- ══════════ 保活动作 ══════════ -->
+    <string name="keepalive_action_grant">Grant</string>
+    <string name="keepalive_action_done">Done</string>
+    <string name="keepalive_state_ok">Granted</string>
+    <string name="keepalive_state_missing">Not granted</string>
 </resources>

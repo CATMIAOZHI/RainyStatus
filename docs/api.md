@@ -63,7 +63,13 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
     "showMood": true,
     "timezoneOffsetMinutes": 480,
     "defaultLang": "zh-Hans",
-    "offlineThresholdMs": 1800000
+    "offlineThresholdMs": 1800000,
+    "customText": {
+      "online": null,
+      "offline": null,
+      "gone": null,
+      "noData": null
+    }
   }
 }
 ```
@@ -77,6 +83,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 | `device.*` | 未上报的可选字段为 `null`；`device` 整体为 `null` 表示从未收到过心跳 |
 | `site.timezoneOffsetMinutes` | `null` = 按访客浏览器时区显示（默认）；数字 = 固定 UTC 偏移（分钟） |
 | `site.defaultLang` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才使用 |
+| `site.customText` | 部署者自定义的状态徽章文案（`STATUS_TEXT_*`），未配置的字段为 `null`。**非 null 时前端固定用它、不跟语言切换**；描述文字已去换行、控制字符与零宽字符（BOM/ZWSP）按空格处理，并按码点截断到 40 |
 | `site` | 站点展示配置，由 Worker 的 `vars` 下发，前端据此渲染（不硬编码个人信息） |
 
 > **不提供 `stale` 字段**：KV 读缓存固定 30 秒，对 30 分钟阈值可忽略，加了反而自相矛盾。

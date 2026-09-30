@@ -133,6 +133,10 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 | `SHOW_MOOD` | `true` | 网页是否展示心情 |
 | `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝**按访问者自己的时区**显示；填数字（如 `480`＝UTC+8）则所有人看到同一时钟 |
 | `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才用它 |
+| `STATUS_TEXT_ONLINE` | 空 | 在线时状态徽章的文案（如「还在冒泡」）。留空用内置三语；填了固定用这句，**不跟语言切换**，最多 40 字 |
+| `STATUS_TEXT_OFFLINE` | 空 | 同上，最近一次心跳超过掉线阈值时 |
+| `STATUS_TEXT_GONE` | 空 | 同上，长时间没有任何上报时 |
+| `STATUS_TEXT_NO_DATA` | 空 | 同上，从未收到过心跳时 |
 
 > 这些值在 Deploy to Cloudflare 的配置页里也能直接改。
 

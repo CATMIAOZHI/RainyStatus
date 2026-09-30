@@ -156,8 +156,13 @@ function detectLang() {
 }
 
 function t(key, vars) {
-  const dict = I18N[lang] || I18N['zh-Hans'];
-  let text = dict[key] ?? I18N['zh-Hans'][key] ?? key;
+  // 自定义状态文案优先：部署者显式配了就固定用它（不跟语言切换）。
+  // 这是刻意的——自定义文案是他自己写的一句话，机器翻译只会更差；
+  // 内置文案才会跟着访客语言自动切换。
+  const fromSite = site?.customText?.[key];
+  // 这里用 `||` 而不是 `??`：空串也应当回退到内置文案（服务端已把空串转成 null，
+  // 这是第二道防线——文案渲染成空白是「看不出来的故障」）。
+  let text = fromSite || (I18N[lang] || I18N['zh-Hans'])[key] || I18N['zh-Hans'][key] || key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       text = text.replace(`{${k}}`, String(v));

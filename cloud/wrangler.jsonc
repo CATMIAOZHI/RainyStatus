@@ -44,7 +44,14 @@
     "SHOW_NETWORK": "false",
     "SHOW_MOOD": "true",
     "TIMEZONE_OFFSET_MINUTES": "auto",
-    "DEFAULT_LANG": "zh-Hans"
+    "DEFAULT_LANG": "zh-Hans",
+
+    // 状态文案（可选）：留空则用内置三语文案、跟访客语言切换。
+    // 填了就固定显示你写的这句，不跟语言切换。
+    "STATUS_TEXT_ONLINE": "",
+    "STATUS_TEXT_OFFLINE": "",
+    "STATUS_TEXT_GONE": "",
+    "STATUS_TEXT_NO_DATA": ""
   },
 
   // 不设 limits.cpu_ms：免费版上限就是 10ms，设更小会自杀、设更大无效

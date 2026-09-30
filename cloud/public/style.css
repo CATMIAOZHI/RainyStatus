@@ -68,6 +68,21 @@ body {
   border: 1px solid rgba(255, 133, 162, 0.18);
 }
 
+/* 内容栅格：窄屏单列（= 原来的手机观感），宽屏两列。
+   桌面端不再是一根 420px 的手机竖条。 */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+/* 窄屏也要允许收缩：长串文案撑宽时，不让 1fr 轨道的 auto 下限把卡片顶出去 */
+.col { min-width: 0; }
+
+/* 宽屏（平板/桌面）的响应式覆盖规则统一放在文件**末尾**——
+   媒体查询不提升优先级，同特异性的规则按源码顺序决胜，
+   写在这里会被后面的基础规则悄悄盖掉（详见文件末尾那段注释）。 */
+
 .head {
   display: flex;
   align-items: center;
@@ -146,6 +161,14 @@ h1 {
   gap: 9px;
   font-size: 17px;
   font-weight: 700;
+}
+
+/* 自定义文案上限 40 字，但可能是无空格长串（拉丁 / emoji）：
+   flex 子项默认 min-width:auto 会拒绝收缩，`anywhere` 又能在字符间断行，
+   两者一起才不会把整块内容顶出卡片。 */
+.status-badge > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .dot {
@@ -312,4 +335,64 @@ h1 {
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════
+   宽屏（平板/桌面）：卡片放宽，内容左右分栏——
+   左列「状态 + 电量」，右列「心情 + 明细」。
+
+   必须放在文件最末尾：媒体查询**不提升优先级**，同特异性（0,1,0）的规则
+   按源码顺序决胜。之前这段写在基础规则之前，结果里面 14 条覆盖声明
+   （字号、头像、圆点、间距…）全被后面的基础规则盖掉——卡片确实变宽了、
+   也确实分成两列，但里面全是手机尺寸，看起来「框大了、字还是小的」。
+   ═══════════════════════════════════════════════════════ */
+@media (min-width: 720px) {
+  .card { max-width: 880px; padding: 32px 36px; }
+
+  .grid {
+    grid-template-columns: 1.05fr 1fr;
+    gap: 0 40px;
+    /* 列内间距改由 .col 的 flex gap 控制（列内子项的 margin 会被归零），
+       所以标题区到内容区的间距要在这里补回来，与窄屏的 .status margin-top 一致 */
+    margin-top: 22px;
+  }
+
+  /* 两列各自成为独立纵向流：用 flex gap 而不是子项 margin。
+     不能用 `.col > :first-child { margin-top: 0 }`——`:first-child` 是 DOM 序，
+     右列首元素是带 hidden 的 `.mood`，可见的 `.meta` 反而会多吃 20px 顶边距。 */
+  .col {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  /* 列内间距统一由上面的 gap 提供，因此子项自己的 margin-top 必须归零，
+     否则会变成「gap + margin」双重间距。
+     这里用 (0,2,0) 的选择器而不是 `.col > *`：与各块自身的 (0,1,0) 拉开差距，
+     不依赖「谁写在后面」这种一改就坏的前提。 */
+  .col > .status,
+  .col > .battery,
+  .col > .mood,
+  .col > .meta {
+    margin-top: 0;
+  }
+
+  .head { gap: 14px; }
+  .avatar { width: 60px; height: 60px; font-size: 30px; border-radius: 18px; }
+  h1 { font-size: 22px; }
+  .owner { font-size: 14px; }
+
+  .status { padding: 16px 18px; }
+  .status-badge { font-size: 19px; }
+  .dot { width: 12px; height: 12px; }
+
+  .battery-value { font-size: 46px; }
+  .battery-bar { height: 14px; }
+  .battery-sub { font-size: 14px; }
+
+  .mood-text { font-size: 17px; }
+  .mood-time { font-size: 13px; }
+
+  .meta-row { font-size: 14px; }
+  .meta { gap: 10px; }
 }

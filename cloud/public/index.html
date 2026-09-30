@@ -32,45 +32,51 @@
       </div>
     </header>
 
-    <section class="status" aria-live="polite">
-      <div class="status-badge" id="statusBadge">
-        <span class="dot" id="statusDot"></span>
-        <span id="statusText">—</span>
-      </div>
-      <p class="status-detail" id="statusDetail"></p>
-    </section>
+    <div class="grid">
+      <div class="col">
+        <section class="status" aria-live="polite">
+          <div class="status-badge" id="statusBadge">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">—</span>
+          </div>
+          <p class="status-detail" id="statusDetail"></p>
+        </section>
 
-    <section class="battery" id="batterySection">
-      <div class="battery-head">
-        <span class="battery-label" id="batteryLabel">🔋</span>
-        <span class="battery-value" id="batteryValue">—</span>
+        <section class="battery" id="batterySection">
+          <div class="battery-head">
+            <span class="battery-label" id="batteryLabel">🔋</span>
+            <span class="battery-value" id="batteryValue">—</span>
+          </div>
+          <div class="battery-bar" role="progressbar" id="batteryBar" aria-valuemin="0" aria-valuemax="100">
+            <div class="battery-fill" id="batteryFill"></div>
+          </div>
+          <p class="battery-sub" id="batterySub"></p>
+        </section>
       </div>
-      <div class="battery-bar" role="progressbar" id="batteryBar" aria-valuemin="0" aria-valuemax="100">
-        <div class="battery-fill" id="batteryFill"></div>
-      </div>
-      <p class="battery-sub" id="batterySub"></p>
-    </section>
 
-    <section class="mood" id="moodSection" hidden>
-      <h2 class="section-title" id="moodTitle">心情</h2>
-      <p class="mood-text"><span id="moodEmoji"></span><span id="moodText"></span></p>
-      <p class="mood-time" id="moodTime"></p>
-    </section>
+      <div class="col">
+        <section class="mood" id="moodSection" hidden>
+          <h2 class="section-title" id="moodTitle">心情</h2>
+          <p class="mood-text"><span id="moodEmoji"></span><span id="moodText"></span></p>
+          <p class="mood-time" id="moodTime"></p>
+        </section>
 
-    <dl class="meta" id="metaSection">
-      <div class="meta-row" id="metaTempRow" hidden>
-        <dt id="metaTempLabel">温度</dt><dd id="metaTemp">—</dd>
+        <dl class="meta" id="metaSection">
+          <div class="meta-row" id="metaTempRow" hidden>
+            <dt id="metaTempLabel">温度</dt><dd id="metaTemp">—</dd>
+          </div>
+          <div class="meta-row" id="metaNetworkRow" hidden>
+            <dt id="metaNetworkLabel">网络</dt><dd id="metaNetwork">—</dd>
+          </div>
+          <div class="meta-row" id="metaDeviceRow" hidden>
+            <dt id="metaDeviceLabel">设备</dt><dd id="metaDevice">—</dd>
+          </div>
+          <div class="meta-row">
+            <dt id="metaLastSeenLabel">最后在线</dt><dd id="metaLastSeen">—</dd>
+          </div>
+        </dl>
       </div>
-      <div class="meta-row" id="metaNetworkRow" hidden>
-        <dt id="metaNetworkLabel">网络</dt><dd id="metaNetwork">—</dd>
-      </div>
-      <div class="meta-row" id="metaDeviceRow" hidden>
-        <dt id="metaDeviceLabel">设备</dt><dd id="metaDevice">—</dd>
-      </div>
-      <div class="meta-row">
-        <dt id="metaLastSeenLabel">最后在线</dt><dd id="metaLastSeen">—</dd>
-      </div>
-    </dl>
+    </div>
 
     <footer class="foot">
       <p id="freshnessHint"></p>

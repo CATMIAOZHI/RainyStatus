@@ -234,6 +234,10 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | `TIMEZONE_OFFSET_MINUTES` | `auto` | 网页时间显示时区。`auto`（默认）＝按访客自己的时区；填数字（如 `480`）＝固定 UTC+8 |
 | `DEFAULT_LANG` | `zh-Hans` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才用它 |
 | `NEXT_EXPECTED_MS` | `600000` | 下一条心跳的期望间隔（毫秒）—— 也随 `/api/heartbeat` 响应下发 |
+| `STATUS_TEXT_ONLINE` | 空 | 在线时状态徽章的文案。留空用内置三语（跟访客语言切换）；填了固定用这句，**不跟语言切换**，最多 40 字 |
+| `STATUS_TEXT_OFFLINE` | 空 | 同上，最近一次心跳超过掉线阈值时 |
+| `STATUS_TEXT_GONE` | 空 | 同上，长时间没有任何上报时 |
+| `STATUS_TEXT_NO_DATA` | 空 | 同上，从未收到过心跳时 |
 
 > 网页访问口令**不在 v1 范围**：静态资源在 Worker 之前命中，口令逻辑无处安放，
 > 需连同 `run_worker_first` 一起设计。因此这里不列出该变量，避免部署者以为它已生效。
@@ -343,6 +347,7 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
 - **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。`DEFAULT_LANG` 只在**浏览器语言未命中任何受支持语言**时兜底（否则默认值 `zh-Hans` 会把英文访客强制切成中文）。
 - 网页诚实标注新鲜度：`<60s` →「刚刚」；`<60min` →「N 分钟前」；否则「N 小时 M 分钟前」。页脚注明「数据最多可能滞后约 1 分钟」。
 - **网页时间的时区**：默认 `TIMEZONE_OFFSET_MINUTES=auto` → 用**访客浏览器所在时区**渲染（`new Date()` 本地读数），页脚同时标注当前生效偏移（如 `UTC+08:00`）。填数字偏移则固定时区、所有人同一时钟。**服务端与 App 传递的时间一律是 epoch 毫秒 UTC**，时区只影响展示，不影响任何判定。
+- **网页响应式**：窄屏（< 720px）保持单列竖排卡片（`max-width: 420px`，手机观感）；`@media (min-width: 720px)` 起切两列宽屏（卡片放宽到 880px，左列状态+电量、右列心情+明细）。桌面浏览器打开时按桌面习惯排版，不再是一根手机竖条。
 
 ---
 

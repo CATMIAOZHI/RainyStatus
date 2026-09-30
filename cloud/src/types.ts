@@ -22,6 +22,11 @@ export interface Env {
   TIMEZONE_OFFSET_MINUTES?: string;
   DEFAULT_LANG?: string;
   NEXT_EXPECTED_MS?: string;
+  /** 自定义状态文案，留空则用内置三语文案 */
+  STATUS_TEXT_ONLINE?: string;
+  STATUS_TEXT_OFFLINE?: string;
+  STATUS_TEXT_GONE?: string;
+  STATUS_TEXT_NO_DATA?: string;
 }
 
 /** KV: device_status */
@@ -78,6 +83,21 @@ export interface SiteConfig {
   timezoneOffsetMinutes: number | null;
   defaultLang: string;
   offlineThresholdMs: number;
+  /**
+   * 自定义状态文案；缺省（null）表示用内置的三语文案。
+   *
+   * 只有中文一种语言：内置文案会自动跟着访客语言切换，而自定义文案是部署者
+   * 自己写的一句话，机器翻译只会更差。因此自定义了就固定用它，三语切换对它不生效。
+   */
+  customText: StatusCustomText;
+}
+
+/** 自定义状态文案。null = 未配置，前端回退到内置三语文案 */
+export interface StatusCustomText {
+  online: string | null;
+  offline: string | null;
+  gone: string | null;
+  noData: string | null;
 }
 
 export const SCHEMA_VERSION = 1;

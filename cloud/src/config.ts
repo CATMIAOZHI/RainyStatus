@@ -7,6 +7,8 @@ const DEFAULT_OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 分钟
 const DEFAULT_NEXT_EXPECTED_MS = 10 * 60 * 1000; // 10 分钟（心跳间隔）
 /** 时区默认 `auto`：网页按【访客浏览器所在时区】显示时间，部署者无需配置 */
 const TIMEZONE_AUTO = 'auto';
+/** 自定义状态文案上限（码点）。状态徽章是一行短句，过长会撑破布局 */
+const MAX_CUSTOM_TEXT = 40;
 
 function num(value: string | undefined, fallback: number): number {
   if (value === undefined || value.trim() === '') return fallback;
@@ -26,6 +28,23 @@ function str(value: string | undefined, fallback: string): string {
   if (value === undefined) return fallback;
   const v = value.trim();
   return v === '' ? fallback : v;
+}
+
+/**
+ * 自定义文案解析：空/未设置 → null（前端回退到内置三语文案）。
+ *
+ * 限长 40 码点并去掉换行：它会被直接写进状态徽章，过长会撑破布局、
+ * 换行则会让「一个圆点 + 一句话」的徽章变形。超出部分截断而不是丢弃整条配置。
+ *
+ * 控制字符与零宽字符（`\u0000`、BOM、零宽空格）也一并折成空格：它们在页面上
+ * 渲染为空白，会让「配了文案」看起来像「没配」，正是这里要避免的情况。
+ * 注意别把 ZWJ（`\u200D`）算进去——它是 emoji 组合序列的连接符，去掉会拆散 👨‍👩‍👧。
+ */
+function custom(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const v = value.replace(/[\u0000-\u001F\u007F-\u009F\u200B\uFEFF]+/g, ' ').trim();
+  if (v === '') return null;
+  return [...v].slice(0, MAX_CUSTOM_TEXT).join('');
 }
 
 export function offlineThresholdMs(env: Env): number {
@@ -67,6 +86,12 @@ export function siteConfig(env: Env): SiteConfig {
     timezoneOffsetMinutes: timezoneOffsetMinutes(env),
     defaultLang: sanitizeLang(env.DEFAULT_LANG),
     offlineThresholdMs: offlineThresholdMs(env),
+    customText: {
+      online: custom(env.STATUS_TEXT_ONLINE),
+      offline: custom(env.STATUS_TEXT_OFFLINE),
+      gone: custom(env.STATUS_TEXT_GONE),
+      noData: custom(env.STATUS_TEXT_NO_DATA),
+    },
   };
 }
 

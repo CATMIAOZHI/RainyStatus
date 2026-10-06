@@ -22,6 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -46,12 +47,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rainy.status.R
 import com.rainy.status.domain.model.DeviceSnapshot
+import com.rainy.status.domain.model.MoodEmoji
 import com.rainy.status.ui.components.resolve
 import com.rainy.status.ui.theme.StatusGreen
 import com.rainy.status.ui.theme.StatusOrange
@@ -78,16 +81,25 @@ fun HomeScreen(
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     var moodText by remember { mutableStateOf("") }
+    var moodEmoji by remember { mutableStateOf("") }
+    /** 表情是否已到上限：跨上限那位正好切在代理对中间时结果只有 7 个单元，光看长度会漏提示 */
+    var moodEmojiFull by remember { mutableStateOf(false) }
     var moodDraftSeeded by remember { mutableStateOf(false) }
     var showEndpointHint by remember { mutableStateOf(false) }
 
     // 草稿只在首帧灌入一次；之后完全由用户输入驱动，避免每帧被状态流覆盖。
     // 刻意放在 LaunchedEffect 里而不是组合期直接赋值：组合期写 state 会触发
     // 「组合中改状态」的重组，属于 Compose 明确不推荐的写法。
-    LaunchedEffect(state.runtime.moodDraft, moodDraftSeeded) {
+    LaunchedEffect(state.runtime.moodDraft, state.runtime.moodDraftEmoji, moodDraftSeeded) {
+        if (moodDraftSeeded) return@LaunchedEffect
         val draft = state.runtime.moodDraft
-        if (!moodDraftSeeded && draft != null) {
-            moodText = draft
+        val draftEmoji = state.runtime.moodDraftEmoji
+        // 只要有一个有草稿就灌入：只填了表情、文字还空着时，文字草稿存的是「无」
+        // （空串按无草稿处理），但那个表情不该跟着一起丢
+        if (draft != null || draftEmoji != null) {
+            moodText = draft.orEmpty()
+            moodEmoji = draftEmoji.orEmpty()
+            moodEmojiFull = MoodEmoji.isFull(moodEmoji)
             moodDraftSeeded = true
         }
     }
@@ -98,6 +110,8 @@ fun HomeScreen(
     LaunchedEffect(state.moodSentCount) {
         if (state.moodSentCount > 0) {
             moodText = ""
+            moodEmoji = ""
+            moodEmojiFull = false
         }
     }
 
@@ -182,14 +196,26 @@ fun HomeScreen(
                 item {
                     MoodCard(
                         text = moodText,
+                        emoji = moodEmoji,
+                        emojiFull = moodEmojiFull,
                         onTextChange = { value ->
                             moodText = value
                             moodDraftSeeded = true
-                            viewModel.saveMoodDraft(value)
+                            viewModel.saveMoodDraft(value, moodEmoji)
+                        },
+                        onEmojiChange = { value ->
+                            // 按与云端相同的口径截断（UTF-16 ≤ 8）：超出部分在这里就掉，
+                            // 免得用户打完一大串才发现发不出去
+                            moodEmoji = MoodEmoji.sanitize(value)
+                            // 提示判据用**原始输入**：跨上限那位正好切在代理对中间时，
+                            // 截断结果只有 7 个单元，只看长度会漏掉提示
+                            moodEmojiFull = MoodEmoji.isFull(value)
+                            moodDraftSeeded = true
+                            viewModel.saveMoodDraft(moodText, moodEmoji)
                         },
                         onSend = {
                             // 不在这里清空输入框：失败时要保留用户打的字（见上方的 moodSentCount 效果）
-                            viewModel.sendMood(moodText)
+                            viewModel.sendMood(moodText, moodEmoji)
                         }
                     )
                 }
@@ -491,7 +517,11 @@ private fun KeepAliveRow(
 @Composable
 private fun MoodCard(
     text: String,
+    emoji: String,
+    /** 是否已达上限：由调用方用「原始输入」判定（见 MoodEmoji.isFull 的注释） */
+    emojiFull: Boolean,
     onTextChange: (String) -> Unit,
+    onEmojiChange: (String) -> Unit,
     onSend: () -> Unit,
 ) {
     Card(
@@ -506,6 +536,40 @@ private fun MoodCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            Spacer(modifier = Modifier.height(10.dp))
+            // 表情与文案分开填：表情是网页上状态行前面那个小图标，文案是那句话。
+            // 刻意不做固定候选列表——用系统输入法的 emoji 面板随便挑，
+            // 固定列表只会变成「想要的表情它没有」。
+            val emojiHint = stringResource(R.string.home_mood_emoji_hint)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = emoji,
+                    onValueChange = onEmojiChange,
+                    modifier = Modifier
+                        .width(88.dp)
+                        // 这个框没有 label（88dp 装不下），给读屏一句说明，
+                        // 否则 TalkBack 焦点落到这里只会念出占位符 😊
+                        .semantics { contentDescription = emojiHint },
+                    placeholder = {
+                        Text(
+                            text = "😊",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    },
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    // 满了以后多打的表情会被静默截断（看起来就是「打不进去」），
+                    // 换成一句提示，免得用户以为键盘坏了
+                    text = if (emojiFull) stringResource(R.string.home_mood_emoji_full) else emojiHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (emojiFull) StatusOrange else inkMuted()
+                )
+            }
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedTextField(
                 value = text,

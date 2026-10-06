@@ -238,6 +238,59 @@ function setText(node, text) {
   if (node) node.textContent = text;
 }
 
+/**
+ * 头像：配了 `AVATAR_URL` 显示图片，否则显示 `AVATAR_EMOJI` 字符。
+ *
+ * 图片加载失败（外链挂了、路径写错、混合内容被拦）时退回 emoji——
+ * 留一个空白方块比显示字符难受得多。
+ *
+ * 用 dataset 记住「已经渲染过的组合」：这函数每 60 秒轮询都会调到，
+ * 每次都重建 <img> 会让图片重新解码闪一下，而失败的图还会被反复重试。
+ * 代价是「URL 没变、但资源后来才可用」时不会自己重试（一直停在 emoji 直到刷新）——
+ * 这属于有意取舍：地址写错了本来就该改地址（改完是新一轮部署 + 重新加载页面），
+ * 而为了这种情形每分钟重试一次，会让整页多一个周期性 404 与一次可见闪烁。
+ */
+function renderAvatar() {
+  const node = el('avatar');
+  if (!node) return;
+  const emoji = site?.avatar ?? '';
+  const image = site?.avatarUrl ?? '';
+  const key = `${image}\u0000${emoji}`;
+  if (node.dataset.avatarKey === key) return;
+  node.dataset.avatarKey = key;
+
+  node.textContent = '';
+  if (!image) {
+    node.textContent = emoji;
+    return;
+  }
+  const img = document.createElement('img');
+  img.alt = '';            // 装饰性图片：紧邻的标题已经说明了这是谁
+  img.decoding = 'async';
+  img.addEventListener('error', () => {
+    // 身份校验：img 被移出 DOM 后加载仍会继续、error 照样派发。
+    // 少了这一行，上一轮的失败回调会在新一轮图片 append 之后才执行，
+    // 把刚渲染好的图擦掉——而 dataset 已是新 key，之后轮询会早退，图就永久丢了。
+    if (node.dataset.avatarKey !== key) return;
+    node.textContent = emoji;
+  });
+  img.src = image;         // 用属性赋值而不是 innerHTML，天然免疫标签注入
+  node.appendChild(img);
+}
+
+/** 标签页图标跟着头像走；没配图片时保持浏览器默认图标 */
+function applyFavicon() {
+  const href = site?.avatarUrl;
+  if (!href) return;
+  let link = document.querySelector('link[rel="icon"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+}
+
 function applyStaticI18n() {
   setText(el('batteryLabel'), t('battery'));
   setText(el('moodTitle'), t('mood'));
@@ -280,7 +333,8 @@ function render(data) {
     // 站点信息来自服务端 vars，部署者看到的是自己的
     setText(el('title'), site.title);
     setText(el('owner'), site.owner);
-    setText(el('avatar'), site.avatar);
+    renderAvatar();
+    applyFavicon();
     document.title = site.title;
   }
 

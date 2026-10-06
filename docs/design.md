@@ -210,7 +210,8 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | | 网络类型 | 开关，默认**关** | 同上 |
 | | 设备名称 | 文本，默认空 | 留空则网页不显示；**注意全世界可见** |
 | **心情** | 启用心情 | 开关，默认开 | 关闭后隐藏首页心情卡片 |
-| | 心情文案 | 多行文本 | 本地落草稿（debounce 500ms），防误触丢失 |
+| | 心情表情 | 单行文本 | **自己输入**（用系统输入法的 emoji 面板挑，不做固定候选列表）；按 UTF-16 单元 ≤ 8 截断，与云端校验同口径 |
+| | 心情文案 | 多行文本 | 本地落草稿（debounce 500ms），防误触丢失；表情与文案一起存，同一次磁盘写入 |
 | **保活** | 电池优化白名单 | 状态 + 引导按钮 | 未加白时首页显示黄色提示 |
 | | 精确闹钟 | 状态 + 引导按钮 | Android 14+ 默认拒绝 |
 | | HyperOS 自启动 | 图文引导卡片 | 跳「设置 → 应用 → 自启动管理」等 |
@@ -226,7 +227,8 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 |---|---|---|
 | `SITE_TITLE` | `RainyStatus` | 网页标题 |
 | `OWNER_NAME` | `WaterRainCat` | 网页上显示的主人名字 |
-| `AVATAR_EMOJI` | `☔` | 头像字符 |
+| `AVATAR_EMOJI` | `☔` | 头像字符（没配图片时用它） |
+| `AVATAR_URL` | 空 | 头像图片：站内路径 `/avatar.png`（图放 `cloud/public/`）、`https://` 外链、或小尺寸 `data:image/png;base64,…`。配了用图片，加载失败自动退回 `AVATAR_EMOJI`；`http://` 不收（会被当混合内容拦掉） |
 | `OFFLINE_THRESHOLD_MS` | `1800000` | 掉线阈值（30 分钟） |
 | `SHOW_TEMPERATURE` | `false` | 网页是否展示温度（即使上报了也可隐藏） |
 | `SHOW_NETWORK` | `false` | 同上 |
@@ -346,6 +348,7 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
 - 品牌名 `translatable="false"`；`app_name` 跟随语言（中文系统显「雨晴Status」，其他显 `RainyStatus`）。
 - **网页端**三语：前端 JS 字典 + `navigator.language` 自动判定；支持 `?lang=` 覆盖并写入 `localStorage`，同步 `<html lang>`。`DEFAULT_LANG` 只在**浏览器语言未命中任何受支持语言**时兜底（否则默认值 `zh-Hans` 会把英文访客强制切成中文）。
 - 网页诚实标注新鲜度：`<60s` →「刚刚」；`<60min` →「N 分钟前」；否则「N 小时 M 分钟前」。页脚注明「数据最多可能滞后约 1 分钟」。
+- **网页头像可以是图片**：`AVATAR_URL` 支持站内路径（图放 `cloud/public/`）、`https://` 外链、小尺寸 `data:image/…;base64,…`；图片加载失败自动退回 `AVATAR_EMOJI`，标签页图标同步用这张图。`http://` 一律不收——页面是 https，它会被浏览器当**混合内容**直接拦掉，配了也是空白。
 - **网页时间的时区**：默认 `TIMEZONE_OFFSET_MINUTES=auto` → 用**访客浏览器所在时区**渲染（`new Date()` 本地读数），页脚同时标注当前生效偏移（如 `UTC+08:00`）。填数字偏移则固定时区、所有人同一时钟。**服务端与 App 传递的时间一律是 epoch 毫秒 UTC**，时区只影响展示，不影响任何判定。
 - **网页响应式**：窄屏（< 720px）保持单列竖排卡片（`max-width: 420px`，手机观感）；`@media (min-width: 720px)` 起切两列宽屏（卡片放宽到 880px，左列状态+电量、右列心情+明细）。桌面浏览器打开时按桌面习惯排版，不再是一根手机竖条。
 

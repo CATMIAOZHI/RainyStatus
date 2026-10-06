@@ -125,7 +125,8 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 |------|------|------|
 | `SITE_TITLE` | `RainyStatus` | 网页标题 |
 | `OWNER_NAME` | `WaterRainCat` | 网页上显示的主人名字 |
-| `AVATAR_EMOJI` | `☔` | 头像字符 |
+| `AVATAR_EMOJI` | `☔` | 头像字符（没配图片时用它） |
+| `AVATAR_URL` | 空 | 头像图片。三种写法：站内路径 `/avatar.png`（把图放进 `cloud/public/`）、`https://` 外链、小尺寸 `data:image/png;base64,…`。配了就用图片，**图片加载失败会自动退回 `AVATAR_EMOJI`**；`http://` 会被浏览器当混合内容拦掉，所以不收 |
 | `OFFLINE_THRESHOLD_MS` | `1800000` | 掉线阈值（30 分钟） |
 | `NEXT_EXPECTED_MS` | `600000` | 上报间隔提示（10 分钟） |
 | `SHOW_TEMPERATURE` | `false` | 网页是否展示温度 |

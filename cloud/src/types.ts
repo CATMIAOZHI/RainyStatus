@@ -15,6 +15,8 @@ export interface Env {
   SITE_TITLE?: string;
   OWNER_NAME?: string;
   AVATAR_EMOJI?: string;
+  /** 头像图片（https 外链 / 站内 `/xxx.png` / 小尺寸 data:image）。配了就用图片，没配或加载失败用 AVATAR_EMOJI */
+  AVATAR_URL?: string;
   OFFLINE_THRESHOLD_MS?: string;
   SHOW_TEMPERATURE?: string;
   SHOW_NETWORK?: string;
@@ -76,6 +78,8 @@ export interface SiteConfig {
   title: string;
   owner: string;
   avatar: string;
+  /** 头像图片地址；null = 用 `avatar` 的 emoji 字符 */
+  avatarUrl: string | null;
   showTemperature: boolean;
   showNetwork: boolean;
   showMood: boolean;

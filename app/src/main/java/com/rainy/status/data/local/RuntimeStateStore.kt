@@ -35,10 +35,14 @@ data class RuntimeState(
     val pendingJson: String? = null,
     /** 上次成功发送的心情文本，用于客户端去重（服务端不做读-比较-写） */
     val lastMoodText: String? = null,
+    /** 上次成功发送的心情表情。去重必须连它一起比：只改表情时文字没变，只比文字会被误判成「没变」 */
+    val lastMoodEmoji: String? = null,
     /** 最近一次上报结果摘要，供首页展示 */
     val lastErrorKind: String? = null,
     /** 心情输入草稿：切换页面/重建后不丢用户正在打的字 */
     val moodDraft: String? = null,
+    /** 心情表情草稿：与文字草稿一起存，避免「切个页面回来表情没了」 */
+    val moodDraftEmoji: String? = null,
 ) {
     val hasPending: Boolean get() = pendingJson != null
 }
@@ -56,8 +60,10 @@ class RuntimeStateStore(private val dataStore: DataStore<Preferences>) {
             seq = prefs[KEY_SEQ] ?: 0L,
             pendingJson = prefs[KEY_PENDING],
             lastMoodText = prefs[KEY_LAST_MOOD],
+            lastMoodEmoji = prefs[KEY_LAST_MOOD_EMOJI],
             lastErrorKind = prefs[KEY_LAST_ERROR],
             moodDraft = prefs[KEY_MOOD_DRAFT],
+            moodDraftEmoji = prefs[KEY_MOOD_DRAFT_EMOJI],
         )
     }
 
@@ -126,14 +132,29 @@ class RuntimeStateStore(private val dataStore: DataStore<Preferences>) {
         return next
     }
 
-    suspend fun setLastMoodText(text: String?) = dataStore.edit { prefs ->
-        if (text == null) prefs.remove(KEY_LAST_MOOD) else prefs[KEY_LAST_MOOD] = text
+    /**
+     * 记录「上次成功发送的心情」= 文字 + 表情，两个 key 在**同一次** edit 里写。
+     *
+     * 为什么要一起写：去重比的是这个整体，分两次事务时若进程被杀，会留下
+     * 「新文字 + 旧表情」的错配，下次发送要么多写一次 KV、要么被误判成「没变」跳过。
+     */
+    suspend fun setLastMood(text: String, emoji: String?) = dataStore.edit { prefs ->
+        prefs[KEY_LAST_MOOD] = text
+        if (emoji == null) prefs.remove(KEY_LAST_MOOD_EMOJI) else prefs[KEY_LAST_MOOD_EMOJI] = emoji
     }
 
-    /** 保存心情输入草稿；空串按「无草稿」处理（避免下次进页面先显示空串覆盖占位提示） */
-    suspend fun setMoodDraft(text: String?) = dataStore.edit { prefs ->
+    /**
+     * 保存心情草稿（文字 + 表情）；空值按「无草稿」处理
+     * （避免下次进页面先显示空串覆盖占位提示）。
+     *
+     * 两个字段在**同一次** edit 里写：分两次开会多一次磁盘事务，
+     * 而且中途被杀进程会留下「有表情没文字」的半个草稿。
+     */
+    suspend fun setMoodDraft(text: String?, emoji: String?) = dataStore.edit { prefs ->
         val value = text?.takeIf { it.isNotEmpty() }
         if (value == null) prefs.remove(KEY_MOOD_DRAFT) else prefs[KEY_MOOD_DRAFT] = value
+        val emojiValue = emoji?.takeIf { it.isNotEmpty() }
+        if (emojiValue == null) prefs.remove(KEY_MOOD_DRAFT_EMOJI) else prefs[KEY_MOOD_DRAFT_EMOJI] = emojiValue
     }
 
     /**
@@ -152,8 +173,10 @@ class RuntimeStateStore(private val dataStore: DataStore<Preferences>) {
         val KEY_SEQ = longPreferencesKey("seq")
         val KEY_PENDING = stringPreferencesKey("pending_json")
         val KEY_LAST_MOOD = stringPreferencesKey("last_mood_text")
+        val KEY_LAST_MOOD_EMOJI = stringPreferencesKey("last_mood_emoji")
         val KEY_LAST_ERROR = stringPreferencesKey("last_error_kind")
         val KEY_MOOD_DRAFT = stringPreferencesKey("mood_draft")
+        val KEY_MOOD_DRAFT_EMOJI = stringPreferencesKey("mood_draft_emoji")
     }
 }
 

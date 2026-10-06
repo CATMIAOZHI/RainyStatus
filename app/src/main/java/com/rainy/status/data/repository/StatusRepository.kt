@@ -220,13 +220,18 @@ class StatusRepository(
 
         val runtime = runtimeStateStore.snapshot()
         val trimmed = text.trim()
+        val trimmedEmoji = emoji?.trim()?.ifEmpty { null }
         if (trimmed.isEmpty()) return@withLock ReportOutcome.Skipped("empty")
-        if (runtime.lastMoodText == trimmed) return@withLock ReportOutcome.Skipped("unchanged")
+        // 去重必须连表情一起比：只换表情、文字没变时，若只比文字就会被当成「没变」跳过，
+        // 用户看到的是「点了发送，网页上的表情还是旧的」
+        if (runtime.lastMoodText == trimmed && runtime.lastMoodEmoji == trimmedEmoji) {
+            return@withLock ReportOutcome.Skipped("unchanged")
+        }
 
-        val result = api.sendMood(baseUrl, settings.token, MoodRequestDto(text = trimmed, emoji = emoji))
+        val result = api.sendMood(baseUrl, settings.token, MoodRequestDto(text = trimmed, emoji = trimmedEmoji))
         when (result) {
             is ApiResult.Success -> {
-                runtimeStateStore.setLastMoodText(trimmed)
+                runtimeStateStore.setLastMood(trimmed, trimmedEmoji)
                 // 心情写入同样消耗一次 KV 写，必须计入预算：否则连发心情会绕过降频保护，
                 // 真实写入量超出账号级 1000/天时心跳先被拒，而 App 还显示「没超」
                 recordKvWrite(runtime, System.currentTimeMillis())

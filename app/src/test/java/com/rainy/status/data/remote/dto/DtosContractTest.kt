@@ -97,6 +97,19 @@ class DtosContractTest {
     }
 
     @Test
+    fun `mood emoji is explicit null on the wire when not set`() {
+        // 与心跳的同类断言对称：用户没填表情时发的是显式 null 而不是「键消失」。
+        // encodeDefaults 若被关掉，这条会红——抓包语义从「明确没填」退化成「忘了发」
+        val dto = MoodRequestDto(text = "困了喵…", emoji = null)
+        val obj = json.encodeToJsonElement(MoodRequestDto.serializer(), dto).jsonObject
+        assertEquals(setOf("schemaVersion", "text", "emoji"), obj.keys)
+        assertEquals(JsonNull, obj.getValue("emoji"))
+
+        val withEmoji = json.encodeToJsonElement(MoodRequestDto.serializer(), MoodRequestDto(text = "x", emoji = "😴")).jsonObject
+        assertEquals("😴", withEmoji.getValue("emoji").toString().trim('"'))
+    }
+
+    @Test
     fun `response parsing tolerates unknown fields`() {
         // 云端将来加字段时旧 App 必须还能解析，否则一次服务端升级会让旧版本全挂
         val raw = """{"ok":true,"receivedAt":1,"nextExpectedInMs":2,"futureField":"x"}"""

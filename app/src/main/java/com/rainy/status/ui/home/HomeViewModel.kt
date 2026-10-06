@@ -12,6 +12,7 @@ import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.repository.ReportOutcome
 import com.rainy.status.data.repository.StatusRepository
 import com.rainy.status.domain.model.DeviceSnapshot
+import com.rainy.status.domain.model.MoodEmoji
 import com.rainy.status.domain.model.ReportTrigger
 import com.rainy.status.domain.server.EndpointNormalizer
 import com.rainy.status.service.StatusHeartbeatService
@@ -179,7 +180,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun sendMood(text: String) {
+    fun sendMood(text: String, emoji: String) {
         viewModelScope.launch {
             val trimmed = text.trim()
             if (trimmed.isEmpty()) {
@@ -193,7 +194,9 @@ class HomeViewModel @Inject constructor(
                 return@launch
             }
 
-            val outcome = repository.sendMood(trimmed)
+            // 表情在这里再洗一遍：界面上已经按同一规则截断过，这里是防线——
+            // 超过 8 个单元会被云端直接 400，而用户只会看到一句「发送失败」
+            val outcome = repository.sendMood(trimmed, MoodEmoji.toPayload(emoji))
             val message = when (outcome) {
                 is ReportOutcome.Success -> UiText.Resource(R.string.home_mood_sent)
                 is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
@@ -215,7 +218,7 @@ class HomeViewModel @Inject constructor(
                 // 500ms 后会把这个刚发出去的文字写回草稿，界面上就变成「发完又自己冒出来」
                 moodDraftJob?.cancel()
                 moodDraftJob = null
-                runtimeStateStore.setMoodDraft("")
+                runtimeStateStore.setMoodDraft("", null)
                 // 计数 +1 是给 UI 的清空信号：只有这一刻才允许把输入框清掉
                 _uiState.update { it.copy(moodSentCount = it.moodSentCount + 1, message = message) }
             } else {
@@ -224,12 +227,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** 心情草稿实时落盘（防误触 / 切页丢失），带 500ms 防抖 */
-    fun saveMoodDraft(text: String) {
+    /** 心情草稿实时落盘（防误触 / 切页丢失），带 500ms 防抖。文字与表情一起存，同一次磁盘写入 */
+    fun saveMoodDraft(text: String, emoji: String) {
         moodDraftJob?.cancel()
         moodDraftJob = viewModelScope.launch {
             delay(MOOD_DRAFT_DEBOUNCE_MS)
-            runtimeStateStore.setMoodDraft(text)
+            runtimeStateStore.setMoodDraft(text, MoodEmoji.sanitize(emoji))
         }
     }
 

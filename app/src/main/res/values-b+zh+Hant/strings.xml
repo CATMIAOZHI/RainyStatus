@@ -41,6 +41,8 @@
     <string name="home_state_throttled">已觸發每日額度保護，自動降頻</string>
     <string name="home_mood_title">現在的心情</string>
     <string name="home_mood_hint">在做什麼呢？</string>
+    <string name="home_mood_emoji_hint">表情（可留空）</string>
+    <string name="home_mood_emoji_full">表情已達上限</string>
     <string name="home_mood_send">傳送</string>
     <string name="home_mood_sent">心情已更新</string>
     <string name="home_mood_too_long">太長了（最多 %1$d 個字元）</string>

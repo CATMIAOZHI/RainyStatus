@@ -10,6 +10,9 @@ const TIMEZONE_AUTO = 'auto';
 /** 自定义状态文案上限（码点）。状态徽章是一行短句，过长会撑破布局 */
 const MAX_CUSTOM_TEXT = 40;
 
+/** 头像地址长度上限。data: URL 也算在内——Workers 的变量值本身有大小限制，别当图床用 */
+const MAX_AVATAR_URL = 4096;
+
 function num(value: string | undefined, fallback: number): number {
   if (value === undefined || value.trim() === '') return fallback;
   const parsed = Number(value);
@@ -74,12 +77,38 @@ export function timezoneOffsetMinutes(env: Env): number | null {
   return parsed;
 }
 
+/**
+ * 头像图片地址：白名单三种形态，其余一律当「没配」（回退 emoji）。
+ *
+ * - 站内路径 `/avatar.png`（把图放进 `cloud/public/`）——推荐，零外部依赖
+ * - `https://…` 外链
+ * - `data:image/…;base64,…` 内联小图标（不想额外挂文件时用，注意别塞太大）
+ *
+ * 为什么排除 `http://`：状态页是 https，浏览器会把它当**混合内容**直接拦掉，
+ * 配了也是空白，不如老老实实回退到 `AVATAR_EMOJI`。
+ * `//host/x.png` 这种协议相对地址等于外站，一并拒绝；`javascript:`/`file:` 同理。
+ */
+export function avatarImageUrl(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const v = value.trim();
+  if (v === '' || v.length > MAX_AVATAR_URL) return null;
+  // 反斜杠一律拒绝：`/\evil.com/x.png` 会被 URL 规范归一成 `//evil.com/x.png`，
+  // 正是下面那条「协议相对地址」要挡的东西；正常写法里也不会出现反斜杠
+  if (v.includes('\\')) return null;
+  if (v.startsWith('data:')) {
+    return /^data:image\/[a-z0-9.+-]+;base64,/i.test(v) ? v : null;
+  }
+  if (v.startsWith('/') && !v.startsWith('//')) return v;
+  return /^https:\/\/\S+$/i.test(v) ? v : null;
+}
+
 /** 站点公开配置：由 /api/status 下发，网页据此渲染，无需硬编码 */
 export function siteConfig(env: Env): SiteConfig {
   return {
     title: str(env.SITE_TITLE, 'RainyStatus'),
     owner: str(env.OWNER_NAME, 'WaterRainCat'),
     avatar: str(env.AVATAR_EMOJI, '☔'),
+    avatarUrl: avatarImageUrl(env.AVATAR_URL),
     showTemperature: bool(env.SHOW_TEMPERATURE, false),
     showNetwork: bool(env.SHOW_NETWORK, false),
     showMood: bool(env.SHOW_MOOD, true),

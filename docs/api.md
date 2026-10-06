@@ -58,6 +58,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
     "title": "RainyStatus",
     "owner": "WaterRainCat",
     "avatar": "☔",
+    "avatarUrl": null,
     "showTemperature": false,
     "showNetwork": false,
     "showMood": true,
@@ -84,6 +85,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 | `site.timezoneOffsetMinutes` | `null` = 按访客浏览器时区显示（默认）；数字 = 固定 UTC 偏移（分钟） |
 | `site.defaultLang` | `zh-Hans` / `zh-Hant` / `en`。**仅作兜底**：浏览器语言未命中受支持语言时才使用 |
 | `site.customText` | 部署者自定义的状态徽章文案（`STATUS_TEXT_*`），未配置的字段为 `null`。**非 null 时前端固定用它、不跟语言切换**；描述文字已去换行、控制字符与零宽字符（BOM/ZWSP）按空格处理，并按码点截断到 40 |
+| `site.avatarUrl` | 头像图片（`AVATAR_URL`）；`null` = 用 `site.avatar` 的 emoji 字符。只接受站内路径 `/x.png`、`https://` 外链、`data:image/*;base64,…`（长度 ≤ 4096），其余一律按未配置处理；前端在图片加载失败时也会退回 emoji |
 | `site` | 站点展示配置，由 Worker 的 `vars` 下发，前端据此渲染（不硬编码个人信息） |
 
 > **不提供 `stale` 字段**：KV 读缓存固定 30 秒，对 30 分钟阈值可忽略，加了反而自相矛盾。
@@ -148,7 +150,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 | 字段 | 必需 | 约束 |
 |---|---|---|
 | `text` | ✅ | 非空，≤ 140 **码点**（emoji/中文都算 1 个） |
-| `emoji` | 可选 | ≤ 8 字符 |
+| `emoji` | 可选 | ≤ 8 **UTF-16 单元**（一个 😀 占 2 个，`👨‍👩‍👧` 这种 ZWJ 组合占 8 个；≈ 4 个普通 emoji）。App 端用 `MoodEmoji` 按同一口径截断，不会因为表情超长而被 400 拒 |
 
 响应：`{ "ok": true, "updatedAt": 1759200000500 }`
 

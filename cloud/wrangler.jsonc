@@ -1,11 +1,14 @@
 {
   // ═══════════════════════════════════════════════════════
-  // RainyStatus 云端 Worker 配置
+  // RainyStatus 云端 Worker 配置（**模板**）
   //
-  // 一键部署（Deploy to Cloudflare）会自动创建 KV namespace 并把
-  // id 回填到这里。手动部署请先执行：
-  //   npx wrangler kv namespace create STATUS_KV
-  // 然后把输出的 id 填到下面的 kv_namespaces[0].id。
+  // 一键部署（Deploy to Cloudflare）会自动创建 KV namespace 并绑定，
+  // 所以下面 kv_namespaces 里**刻意不写 id**：写成占位字符串的话，
+  // wrangler 会认为「id 已指定」而跳过自动创建，最后把那个占位串当真实
+  // namespace id 用（dry-run 查不出来，只有真实 deploy 才会失败）。
+  //
+  // 手动部署则要自己填：先 `npx wrangler kv namespace create STATUS_KV`
+  // 再把输出的 id 填进来（README 手动部署一节有完整步骤）。
   // ═══════════════════════════════════════════════════════
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "rainystatus",
@@ -28,8 +31,10 @@
 
   "kv_namespaces": [
     {
-      "binding": "STATUS_KV",
-      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+      // 刻意留空 id：一键部署时 wrangler 会自动创建并绑定 KV
+      // （实测：`npx wrangler deploy` 会输出 "STATUS_KV provisioned 🎉"）。
+      // 手动部署请先 `npx wrangler kv namespace create STATUS_KV` 再把 id 填这里。
+      "binding": "STATUS_KV"
     }
   ],
 

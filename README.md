@@ -157,7 +157,11 @@ npm install
 # 1) 建 KV namespace（记下输出的 id）
 npx wrangler kv namespace create STATUS_KV
 
-# 2) 把 id 填进 wrangler.jsonc 的 kv_namespaces[0].id
+# 2) 把 id 填进 wrangler.jsonc 的 kv_namespaces[0]：
+#       { "binding": "STATUS_KV", "id": "<上一步的 id>" }
+#    模板里刻意没写 id：写了占位串会被 wrangler 当成「id 已指定」而跳过
+#    自动创建。忘了填也不会报错 —— CLI 会自动建一个 KV 并把 id 回写进
+#    wrangler.jsonc（这个受跟踪文件会被改动，注意别连同它一起提交）。
 
 # 3) 设置鉴权 token（非交互；交互式终端会转成密码提示）
 printf '%s' "$(openssl rand -base64 48)" | npx wrangler secret put AUTH_TOKEN
@@ -176,6 +180,19 @@ curl -X POST https://<你的-worker>.workers.dev/api/heartbeat \
 ### 绑定自己的域名（可选）
 
 同账号下 zone 处于 active、且该主机名**没有已存在的 CNAME** 时，取消 `wrangler.jsonc` 末尾 `routes` 的注释并改成你的域名，同时把 `workers_dev` 改成 `false`（收敛扫描面）。Cloudflare 会自动建 DNS 记录并签发证书（可能等 1–2 分钟）。
+
+> **本仓库维护者请注意**：上面这段是给「部署自己实例的读者」的通用说明。
+> **本仓库自己**不要把真域名与真 KV id 提交进仓库 —— `wrangler.jsonc` 是给所有人
+> 一键部署用的模板，里面留着真域名会让别人的部署因为「zone 不存在」而失败。
+> 本仓库的做法是把它放进 `cloud/wrangler.prod.jsonc`（已被 `.gitignore` 忽略，**不进仓库**），
+> 部署线上实例时：
+>
+> ```bash
+> npx wrangler deploy -c wrangler.prod.jsonc
+> ```
+>
+> 改动 `wrangler.jsonc` 的公共项（assets / vars / 兼容日期）时，记得同步 prod 配置；
+> 而且改的是**你自己 fork 里的副本**，不要把这边的模板改回带真域名/真 id 的版本。
 
 ---
 

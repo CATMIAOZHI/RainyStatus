@@ -1,7 +1,7 @@
 # 雨晴Status · 设计方案
 
-> 状态：**方案已定稿，工程已落地**（App + Worker + 静态页均已实现；云端尚未部署，等部署凭据）
-> 最后更新：2026-09-30
+> 状态：**方案已定稿，工程已落地，云端已上线**（App + Worker + 静态页均已实现；2026-10-06 已部署到 `https://status.WaterRainCat.com`，自有域名 + KV 均已绑定）
+> 最后更新：2026-10-06
 
 ---
 
@@ -174,6 +174,10 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 ```
 
 点击后 Cloudflare 会：克隆仓库到用户自己的 GitHub → **自动创建并绑定 KV namespace**（官方支持的自动 provision 资源类型包含 KV）→ 用 Workers Builds 构建部署。全程不需要本地环境。
+
+> **自动 provision 已实测**（CLI 路径）：模板里 `kv_namespaces` 刻意不写 id 时，`npx wrangler deploy` 会输出 `Provisioning STATUS_KV... STATUS_KV provisioned 🎉` 并完成绑定。按钮走的是 Workers Builds 的等价路径（resource id 只在 dashboard 可见、不回写仓库），与 CLI 的「回写 wrangler.jsonc」行为不同，该路径未单独实测。
+>
+> 反过来说：模板里**不能**写占位 id。wrangler 判定「是否需要自动创建 KV」看的是 `id` 是否为空——写个占位串会被当成「id 已指定」，于是跳过 provision 并把占位串当真实 id 上传（dry-run 查不出来，只有真实部署才会失败）。
 
 - 每个用户花自己的额度 → 各自独立，互不影响。
 - App 端只需填「自己的 Worker 地址 + 自己的 Token」。

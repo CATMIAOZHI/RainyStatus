@@ -1,8 +1,8 @@
 # 云端本地文件
 node_modules/
 dist/
+dist-prod/
 .wrangler/
-
 # 本地 secret（含真实 AUTH_TOKEN），绝不提交
 .dev.vars
 .dev.vars.*
@@ -10,3 +10,5 @@ dist/
 .env
 .env.*
 !.env.example
+# 生产部署配置（含自有域名与真实 KV id），仓库里只放模板 wrangler.jsonc
+wrangler.prod.jsonc

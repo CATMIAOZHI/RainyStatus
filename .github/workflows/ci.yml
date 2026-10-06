@@ -136,7 +136,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4
         with:
-          node-version: '20'
+          # wrangler 4.x 要求 Node >= 22：写 20 会让下面的 dry-run 直接报
+          # 「Wrangler requires at least Node.js v22.0.0」并让整个 job 失败。
+          # 本地开发机是 v24，所以这个坑只有 CI 会踩出来。
+          node-version: '22'
       - name: Install dependencies
         working-directory: cloud
         run: npm install --no-audit --no-fund

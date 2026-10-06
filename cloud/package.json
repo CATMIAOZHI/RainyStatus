@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "RainyStatus 云端：Cloudflare Worker（状态网页 + 心跳 API）",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

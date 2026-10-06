@@ -145,6 +145,11 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 
 ## 🔧 手动部署（不想用一键按钮）
 
+> 需要 **Node ≥ 22**：wrangler 4.x 启动时会硬性校验版本，Node 20 下第一个
+> `npx wrangler` 命令就会报 `Wrangler requires at least Node.js v22.0.0`
+> （`npm install` 阶段也会先给一条 EBADENGINE 警告）。
+> `cloud/package.json` 的 `engines` 与 CI 的 `node-version` 都按这个下限对齐。
+
 ```bash
 cd cloud
 npm install
@@ -189,6 +194,8 @@ KEYSTORE_PASSWORD=dummy KEYSTORE_ALIAS=dummy KEY_PASSWORD=dummy ./gradlew assemb
 APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 
 ### 云端（`cloud/`）
+
+> 需要 **Node ≥ 22**（wrangler 4.x 的硬性下限，见上方「手动部署」开头）。
 
 ```bash
 cd cloud

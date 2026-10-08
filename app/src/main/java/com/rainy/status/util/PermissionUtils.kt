@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import java.util.Locale
 
 /**
  * 保活相关状态查询与系统页跳转。
@@ -70,32 +72,20 @@ object PermissionUtils {
 
     /**
      * 尽量打开厂商的「自启动管理」页；找不到就退到应用详情页。
-     * 逐个尝试是刻意的：包可见性限制下无法预先查询，只能实际启动。
+     *
+     * 顺序为「厂商 action → 组件 → 应用详情页」。本机 HyperOS V816 的 shell
+     * resolve-activity 可将 MIUI action 解析到自启动管理页；这不保证其他版本可用。
+     * 厂商非标准入口可能随系统升级变化，启动失败时继续兜底。
      */
     fun openAutostartSettings(context: Context) {
-        val candidates = listOf(
-            ComponentName(
-                "com.miui.securitycenter",
-                "com.miui.permcenter.autostart.AutoStartManagementActivity"
-            ),
-            ComponentName(
-                "com.huawei.systemmanager",
-                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
-            ),
-            ComponentName(
-                "com.coloros.safecenter",
-                "com.coloros.safecenter.permission.startup.StartupAppListActivity"
-            ),
-            ComponentName(
-                "com.vivo.permissionmanager",
-                "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
-            ),
-            ComponentName(
-                "com.samsung.android.lool",
-                "com.samsung.android.sm.ui.battery.BatteryActivity"
-            ),
-        )
-        for (component in candidates) {
+        for (action in AUTOSTART_ACTIONS) {
+            val intent = Intent(action).apply {
+                addCategory(Intent.CATEGORY_DEFAULT)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (startSafely(context, intent)) return
+        }
+        for (component in AUTOSTART_COMPONENTS) {
             val intent = Intent().apply {
                 this.component = component
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -104,6 +94,52 @@ object PermissionUtils {
         }
         openAppDetails(context)
     }
+
+    /**
+     * 是否值得展示「自启动」这一行保活项。
+     *
+     * 按厂商标识启发式展示，不代表已检测到系统开关或后台限制。
+     * 未命中的设备不展示本项；电池优化与闹钟引导仍独立提供。
+     */
+    fun needsOemAutostartGuide(): Boolean {
+        val maker = "${Build.MANUFACTURER} ${Build.BRAND}".lowercase(Locale.ROOT)
+        return AGGRESSIVE_OEM_KEYWORDS.any { maker.contains(it) }
+    }
+
+    private val AUTOSTART_ACTIONS = listOf(
+        // MIUI / HyperOS（实测可解析）
+        "miui.intent.action.OP_AUTO_START",
+        // 乐视
+        "com.letv.android.letvsafe.autoboot",
+    )
+
+    private val AUTOSTART_COMPONENTS = listOf(
+        ComponentName(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.autostart.AutoStartManagementActivity"
+        ),
+        ComponentName(
+            "com.huawei.systemmanager",
+            "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+        ),
+        ComponentName(
+            "com.coloros.safecenter",
+            "com.coloros.safecenter.permission.startup.StartupAppListActivity"
+        ),
+        ComponentName(
+            "com.vivo.permissionmanager",
+            "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
+        ),
+    )
+
+    /** 厂商标识关键词（都按小写比较）：命中才显示自启动引导；须与 [AUTOSTART_COMPONENTS] 覆盖的厂商保持同步 */
+    private val AGGRESSIVE_OEM_KEYWORDS = listOf(
+        "xiaomi", "redmi", "poco",
+        "huawei", "honor",
+        "oppo", "realme", "oneplus",
+        "vivo", "iqoo",
+        "meizu", "letv", "smartisan",
+    )
 
     /** 打开状态页 / 项目地址这类外部链接 */
     fun openUrl(context: Context, url: String) {

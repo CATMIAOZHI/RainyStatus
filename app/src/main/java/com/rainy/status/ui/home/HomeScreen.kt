@@ -190,7 +190,14 @@ fun HomeScreen(
                 )
             }
 
-            item { KeepAliveCard(state.keepAlive, onOpenSettings = onOpenSettings) }
+            item {
+                KeepAliveCard(
+                    status = state.keepAlive,
+                    autostartConfirmed = state.settings.autostartConfirmed,
+                    onOpenSettings = onOpenSettings,
+                    onConfirmAutostart = { viewModel.confirmAutostart(it) },
+                )
+            }
 
             if (state.settings.moodEnabled) {
                 item {
@@ -426,12 +433,18 @@ private fun ActionRow(
 @Composable
 private fun KeepAliveCard(
     status: KeepAliveStatus,
+    /** 用户自述已在系统里打开「自启动」，不是系统状态检测结果。 */
+    autostartConfirmed: Boolean,
     onOpenSettings: () -> Unit,
+    onConfirmAutostart: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    // 自启动只在需要它的厂商上参与判定：原生 Android 没这个开关，
+    // 把它算进 allGood 会让原生机器永远显示「还有一项没做」。
     val allGood = status.ignoringBatteryOptimizations &&
         status.canScheduleExactAlarms &&
-        status.hasNotificationPermission
+        status.hasNotificationPermission &&
+        (!status.needsAutostartGuide || autostartConfirmed)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -470,6 +483,14 @@ private fun KeepAliveCard(
                 onFix = onOpenSettings
             )
 
+            if (status.needsAutostartGuide) {
+                AutostartRow(
+                    confirmed = autostartConfirmed,
+                    onOpen = { PermissionUtils.openAutostartSettings(context) },
+                    onConfirm = onConfirmAutostart,
+                )
+            }
+
             if (!allGood) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
@@ -477,6 +498,74 @@ private fun KeepAliveCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = inkMuted()
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 「系统自启动」一行。
+ *
+ * 本项没有使用系统状态查询接口：只展示可撤销的用户确认。
+ * 跳转设置不自动确认；撤销只清除本地记录，不会关闭系统开关。
+ */
+@Composable
+private fun AutostartRow(
+    confirmed: Boolean,
+    onOpen: () -> Unit,
+    onConfirm: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.home_keepalive_autostart),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = stringResource(
+                    if (confirmed) R.string.home_keepalive_autostart_ok
+                    else R.string.home_keepalive_autostart_no
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (confirmed) StatusGreen else StatusOrange
+            )
+        }
+        TextButton(onClick = onOpen) {
+            Text(
+                text = stringResource(
+                    if (confirmed) R.string.keepalive_action_open
+                    else R.string.keepalive_action_grant
+                ),
+                color = StrawberryPink
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (confirmed) {
+            Text(
+                text = stringResource(R.string.keepalive_action_revoke),
+                style = MaterialTheme.typography.bodySmall,
+                color = inkMuted()
+            )
+            IconButton(onClick = { onConfirm(false) }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_arrow_back),
+                    contentDescription = stringResource(R.string.keepalive_action_revoke),
+                    tint = StrawberryPink
+                )
+            }
+        } else {
+            TextButton(onClick = { onConfirm(true) }) {
+                Text(stringResource(R.string.keepalive_action_confirm), color = StrawberryPink)
             }
         }
     }

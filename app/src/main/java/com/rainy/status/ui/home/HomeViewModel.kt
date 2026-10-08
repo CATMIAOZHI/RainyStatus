@@ -58,6 +58,14 @@ data class KeepAliveStatus(
     val ignoringBatteryOptimizations: Boolean = false,
     val canScheduleExactAlarms: Boolean = false,
     val hasNotificationPermission: Boolean = false,
+    /**
+     * 本机是否为「会激进清理后台」的厂商（小米 / 华为 / OPPO / vivo…）。
+     *
+     * 只有这类系统才需要在保活卡片里出现「系统自启动」这一行：它决定了
+     * `BOOT_COMPLETED` 与前台服务能否活过自家电池策略。原生 / Pixel 没有这个开关，
+     * 显示出来只会是一条永远好不了的红字。判定放 [PermissionUtils.needsOemAutostartGuide]。
+     */
+    val needsAutostartGuide: Boolean = false,
 )
 
 /**
@@ -122,9 +130,22 @@ class HomeViewModel @Inject constructor(
                     ignoringBatteryOptimizations = PermissionUtils.isIgnoringBatteryOptimizations(appContext),
                     canScheduleExactAlarms = PermissionUtils.canScheduleExactAlarms(appContext),
                     hasNotificationPermission = PermissionUtils.hasNotificationPermission(appContext),
+                    // 厂商判定是静态属性，但放这里一起刷新：它和其余三项在同一个数据类里，
+                    // 分开填会让「某些字段没刷新」变成下一次改动的坑
+                    needsAutostartGuide = PermissionUtils.needsOemAutostartGuide(),
                 )
             )
         }
+    }
+
+    /**
+     * 用户自述已在系统里打开「自启动」。
+     *
+     * 仅记录可撤销的用户确认，不读取或修改系统开关。
+     * 不影响上报逻辑本身——服务能否拉起仍由系统决定。
+     */
+    fun confirmAutostart(confirmed: Boolean) {
+        viewModelScope.launch { settingsStore.setAutostartConfirmed(confirmed) }
     }
 
     /** 手动补一次上报的本地状态（用于 Snackbar 文案） */

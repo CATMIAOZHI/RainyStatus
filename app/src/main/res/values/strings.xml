@@ -59,6 +59,10 @@
     <string name="home_keepalive_notification">Notification permission</string>
     <string name="home_keepalive_notification_ok">Granted</string>
     <string name="home_keepalive_notification_no">Not granted — the service notification stays hidden</string>
+    <string name="home_keepalive_autostart">System autostart</string>
+    <string name="home_keepalive_autostart_ok">You confirmed it — not checked by the app</string>
+    <string name="keepalive_action_revoke">Undo confirmation</string>
+    <string name="home_keepalive_autostart_no">Not confirmed — check system settings</string>
     <string name="home_keepalive_hint">On Xiaomi / HyperOS, also enable autostart and lock the app in Recents. Without the whitelist, exact 10-minute timing is not achievable.</string>
     <string name="home_view_page">View status page</string>
     <string name="home_view_page_missing">Set the server address first</string>
@@ -86,6 +90,7 @@
     <string name="settings_test_unauthorized">Token rejected (HTTP 401). Check that it matches the AUTH_TOKEN secret.</string>
     <string name="settings_test_error">Failed: %1$s</string>
     <string name="settings_test_not_configured">Fill in the address and token first</string>
+    <string name="settings_save_failed">Settings could not be saved. Check available storage, re-enter the address, token and device name, then retry.</string>
 
     <string name="settings_enabled">Run in background</string>
     <string name="settings_enabled_hint">A foreground service keeps sending your heartbeat</string>
@@ -113,7 +118,7 @@
     <string name="settings_keepalive_battery">Battery optimization whitelist</string>
     <string name="settings_keepalive_alarm">Exact alarms</string>
     <string name="settings_keepalive_notification">Notification permission</string>
-    <string name="settings_keepalive_autostart_app">Open autostart settings</string>
+    <string name="settings_keepalive_autostart">System autostart</string>
     <string name="settings_keepalive_autostart_hint">On HyperOS / MIUI: Settings → Apps → Manage apps → RainyStatus → Autostart. Also lock the card in the Recents screen and set battery saver to "No restrictions".</string>
 
     <string name="settings_theme">Theme</string>
@@ -177,6 +182,11 @@
     <!-- ══════════ 保活动作 ══════════ -->
     <string name="keepalive_action_grant">Grant</string>
     <string name="keepalive_action_done">Done</string>
+    <string name="keepalive_action_confirm">I have enabled it</string>
+    <string name="keepalive_action_open">Open</string>
     <string name="keepalive_state_ok">Granted</string>
     <string name="keepalive_state_missing">Not granted</string>
+    <!-- 自启动是「系统开关」而不是「权限授权」，用词与上面两条分开，避免读起来像同一个东西 -->
+    <string name="keepalive_state_on">You confirmed it</string>
+    <string name="keepalive_state_off">Not confirmed</string>
 </resources>

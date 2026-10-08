@@ -58,6 +58,10 @@
     <string name="home_keepalive_notification">通知權限</string>
     <string name="home_keepalive_notification_ok">已授權</string>
     <string name="home_keepalive_notification_no">未授權，常駐通知不可見</string>
+    <string name="home_keepalive_autostart">系統自啟動</string>
+    <string name="home_keepalive_autostart_ok">你已確認（非 App 檢測結果）</string>
+    <string name="keepalive_action_revoke">撤銷確認</string>
+    <string name="home_keepalive_autostart_no">未確認，請檢查系統設定</string>
     <string name="home_keepalive_hint">小米 / HyperOS 還需開啟「自啟動」並在多工卡片裡加鎖。不加入白名單的話，10 分鐘精確度無法保證。</string>
     <string name="home_view_page">查看狀態頁</string>
     <string name="home_view_page_missing">請先填寫上報地址</string>
@@ -85,6 +89,7 @@
     <string name="settings_test_unauthorized">Token 被拒絕（HTTP 401），請確認與 AUTH_TOKEN 一致。</string>
     <string name="settings_test_error">失敗：%1$s</string>
     <string name="settings_test_not_configured">請先填寫位址和 Token</string>
+    <string name="settings_save_failed">設定儲存失敗。請檢查可用儲存空間，重新填寫位址、Token 和裝置名稱後重試。</string>
 
     <string name="settings_enabled">背景常駐上報</string>
     <string name="settings_enabled_hint">由前景服務持續傳送心跳</string>
@@ -112,7 +117,7 @@
     <string name="settings_keepalive_battery">電池最佳化白名單</string>
     <string name="settings_keepalive_alarm">精確鬧鐘</string>
     <string name="settings_keepalive_notification">通知權限</string>
-    <string name="settings_keepalive_autostart_app">開啟自啟動設定</string>
+    <string name="settings_keepalive_autostart">系統自啟動</string>
     <string name="settings_keepalive_autostart_hint">HyperOS / MIUI：設定 → 應用程式 → 應用程式管理 → 雨晴Status → 自啟動。另外在多工卡片裡下拉加鎖，並把省電策略設為「無限制」。</string>
 
     <string name="settings_theme">主題</string>
@@ -173,6 +178,11 @@
     <!-- ══════════ 保活動作 ══════════ -->
     <string name="keepalive_action_grant">去授權</string>
     <string name="keepalive_action_done">已完成</string>
+    <string name="keepalive_action_confirm">我已開啟</string>
+    <string name="keepalive_action_open">去查看</string>
     <string name="keepalive_state_ok">已授權</string>
     <string name="keepalive_state_missing">未授權</string>
+    <!-- 自啟動是「系統開關」不是「權限授權」，用詞分開，避免讀起來像同一件事 -->
+    <string name="keepalive_state_on">你已確認</string>
+    <string name="keepalive_state_off">未確認</string>
 </resources>

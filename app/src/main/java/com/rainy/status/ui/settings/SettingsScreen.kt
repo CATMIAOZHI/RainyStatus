@@ -97,10 +97,10 @@ fun SettingsScreen(
     val snackbarHost = remember { SnackbarHostState() }
     val settings = state.settings
 
-    var endpointInput by remember { mutableStateOf(settings.endpoint) }
-    var tokenInput by remember { mutableStateOf(settings.token) }
+    var endpointInput by remember { mutableStateOf(viewModel.endpointDraft() ?: settings.endpoint) }
+    var tokenInput by remember { mutableStateOf(viewModel.tokenDraft() ?: settings.token) }
     var tokenVisible by remember { mutableStateOf(false) }
-    var deviceNameInput by remember { mutableStateOf(settings.deviceName) }
+    var deviceNameInput by remember { mutableStateOf(viewModel.deviceNameDraft() ?: settings.deviceName) }
     var showIntervalDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
@@ -119,10 +119,30 @@ fun SettingsScreen(
     var tokenTouched by remember { mutableStateOf(false) }
     var deviceNameTouched by remember { mutableStateOf(false) }
 
-    // 首帧 settings 还是默认值，磁盘读完后要同步进输入框（只改这三个，不覆盖用户正在打的字）
-    LaunchedEffect(settings.endpoint) { endpointInput = settings.endpoint }
-    LaunchedEffect(settings.token) { tokenInput = settings.token }
-    LaunchedEffect(settings.deviceName) { deviceNameInput = settings.deviceName }
+    /**
+     * 「用户是否**打过字**」——只用于回灌守卫，与上面的 [endpointTouched] 不同。
+     *
+     * 必须分开：`touched` 是「聚焦过」给失焦提交用的；若拿它当回灌守卫，
+     * 用户在磁盘读完前抢先聚焦（此时 `settings` 还是默认空值），
+     * 初始回灌就会被跳过，输入框停在空白、磁盘里其实有值。
+     */
+    var endpointEdited by remember { mutableStateOf(viewModel.endpointDraft() != null) }
+    var tokenEdited by remember { mutableStateOf(viewModel.tokenDraft() != null) }
+    var deviceNameEdited by remember { mutableStateOf(viewModel.deviceNameDraft() != null) }
+
+    // 首帧 settings 还是默认值，磁盘读完后要同步进输入框。
+    // **只在用户还没打过字时才同步**：落盘完成后 settings 会变，
+    // 若无条件回灌，用户刚敲的下一个字符会被上一次落盘的值顶掉
+    // （表现为「打着打着字符自己退回去」）。
+    LaunchedEffect(settings.endpoint) {
+        if (!endpointEdited) endpointInput = settings.endpoint
+    }
+    LaunchedEffect(settings.token) {
+        if (!tokenEdited) tokenInput = settings.token
+    }
+    LaunchedEffect(settings.deviceName) {
+        if (!deviceNameEdited) deviceNameInput = settings.deviceName
+    }
 
     // 从系统权限页回到前台后刷新保活状态
     LifecycleResumeEffect(Unit) {
@@ -185,6 +205,7 @@ fun SettingsScreen(
                         value = endpointInput,
                         onValueChange = {
                             endpointInput = it
+                            endpointEdited = true
                             viewModel.onEndpointChange(it)
                         },
                         modifier = Modifier
@@ -211,6 +232,7 @@ fun SettingsScreen(
                         value = tokenInput,
                         onValueChange = {
                             tokenInput = it
+                            tokenEdited = true
                             viewModel.onTokenChange(it)
                         },
                         modifier = Modifier
@@ -357,6 +379,7 @@ fun SettingsScreen(
                             // 与云端校验上限一致（见 SettingsStore.MAX_DEVICE_NAME_LENGTH）：超长直接不接受输入
                             if (input.length <= SettingsStore.MAX_DEVICE_NAME_LENGTH) {
                                 deviceNameInput = input
+                                deviceNameEdited = true
                                 viewModel.onDeviceNameChange(input)
                             }
                         },
@@ -426,12 +449,46 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    ClickRow(
-                        title = stringResource(R.string.settings_keepalive_autostart_app),
-                        value = null,
-                        onClick = { PermissionUtils.openAutostartSettings(context) }
-                    )
-                    HintText(stringResource(R.string.settings_keepalive_autostart_hint))
+                    if (state.keepAlive.needsAutostartGuide) {
+                        ClickRow(
+                            title = stringResource(R.string.settings_keepalive_autostart),
+                            value = if (settings.autostartConfirmed) {
+                                stringResource(R.string.keepalive_state_on)
+                            } else {
+                                stringResource(R.string.keepalive_state_off)
+                            },
+                            valueColor = if (settings.autostartConfirmed) StatusGreen else StatusOrange,
+                            onClick = { PermissionUtils.openAutostartSettings(context) }
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (settings.autostartConfirmed) {
+                                Text(
+                                    text = stringResource(R.string.keepalive_action_revoke),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = inkMuted()
+                                )
+                                IconButton(onClick = { viewModel.confirmAutostart(false) }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_arrow_back),
+                                        contentDescription = stringResource(R.string.keepalive_action_revoke),
+                                        tint = StrawberryPink
+                                    )
+                                }
+                            } else {
+                                TextButton(onClick = { viewModel.confirmAutostart(true) }) {
+                                    Text(
+                                        text = stringResource(R.string.keepalive_action_confirm),
+                                        color = StrawberryPink
+                                    )
+                                }
+                            }
+                        }
+                        HintText(stringResource(R.string.settings_keepalive_autostart_hint))
+                    }
                 }
             }
 
@@ -605,6 +662,8 @@ private fun ClickRow(
     title: String,
     value: String?,
     onClick: () -> Unit,
+    /** value 的颜色；默认主题粉，保活那类「状态」行要按有没有达成染成绿/橙 */
+    valueColor: Color = StrawberryPink,
 ) {
     Row(
         modifier = Modifier
@@ -619,7 +678,7 @@ private fun ClickRow(
             modifier = Modifier.weight(1f)
         )
         if (value != null) {
-            Text(text = value, style = MaterialTheme.typography.bodySmall, color = StrawberryPink)
+            Text(text = value, style = MaterialTheme.typography.bodySmall, color = valueColor)
         }
     }
 }

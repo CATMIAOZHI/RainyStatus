@@ -1,7 +1,7 @@
 # 雨晴Status · 设计方案
 
 > 状态：**方案已定稿，工程已落地，云端已上线**（App + Worker + 静态页均已实现；2026-10-06 已部署到 `https://status.WaterRainCat.com`，自有域名 + KV 均已绑定）
-> 最后更新：2026-10-06
+> 最后更新：2026-10-07
 
 ---
 
@@ -218,7 +218,7 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | | 心情文案 | 多行文本 | 本地落草稿（debounce 500ms），防误触丢失；表情与文案一起存，同一次磁盘写入 |
 | **保活** | 电池优化白名单 | 状态 + 引导按钮 | 未加白时首页显示黄色提示 |
 | | 精确闹钟 | 状态 + 引导按钮 | Android 14+ 默认拒绝 |
-| | HyperOS 自启动 | 图文引导卡片 | 跳「设置 → 应用 → 自启动管理」等 |
+| | 系统自启动 | 用户确认状态 + 引导 + 确认/撤销 | 按厂商启发式显示；不查询系统开关，跳设置页后由用户确认，可随时撤销（见 9.8） |
 | **通知** | 常驻通知 | 开关，默认开 | 关掉只改可见性策略，前台服务仍必须带通知 |
 | **语言** | 界面语言 | 跟随系统 / 简体 / 繁體 / English | 复用 RainyToken 的 `LocaleManager` 逻辑 |
 | **调试** | 调试日志 | 页面入口 | 记录每次上报的触发源、耗时、响应码、退避、降频 |
@@ -340,6 +340,29 @@ data class PendingReport(val payload: HeartbeatPayload, val firstQueuedAt: Long,
 ### 9.7 真实风险：HyperOS 杀后台
 
 用户 build、非 root 下**无法根治**。缓解手段：FGS + 电池白名单 + 自启动 + 任务卡加锁 + 闹钟兜底。**必须接受「偶尔漏心跳、甚至连续几小时无心跳」的现实**——云端的 30 分钟阈值给了容错窗口（漏 2 次不判掉线，漏 4 次才判）。
+
+### 9.8 系统「自启动」：为什么只做引导 + 用户确认
+
+保活三件套里，前两项（电池优化白名单、精确闹钟）都有 AOSP 标准接口可查：
+`PowerManager.isIgnoringBatteryOptimizations()` 与 `AlarmManager.canScheduleExactAlarms()`。
+第三项（厂商「自启动」开关）在本项目中没有可靠的跨厂商公开查询接口；项目也未采用厂商非公开接口。以下仅是本机 HyperOS V816（Android 16）的 **shell（uid 2000）观察**，不是普通 App 权限测试，不能据此断言 App 绝对无权读取：
+
+| 探测方式 | 本机观察 |
+|---|---|
+| `cmd appops get <pkg> AUTO_START` | 返回 `Unknown operation string` |
+| `cmd appops get <pkg> 10008` | shell 可读到 `MIUIOP(10008): allow/ignore`；未验证普通 App 的查询能力 |
+| `cmd appops query-op 10008` | 返回 540 行；不据此推断普通 App 权限 |
+| `RUN_ANY_IN_BACKGROUND` | 当次扫描的第三方包未发现 `ignore`；不能推广为所有 MIUI 设备恒为 `allow`，也不能替代自启动状态 |
+| `miui.intent.action.OP_AUTO_START` | 本机 `resolve-activity` 解析到 `com.miui.permcenter.autostart.AutoStartManagementActivity`，不保证其他系统版本 |
+
+方案是「引导 + 可撤销的用户确认」：跳转厂商设置页后，用户返回点击「我已开启」，App 记录**用户自述**（`AppSettings.autostartConfirmed`）。首页与设置页均显示「未确认 / 你已确认」，不把未知显示成未开启。已确认时，两页都提供带「撤销确认」说明的矢量图标按钮；撤销恢复未确认，**不修改系统开关**。
+
+实现要点：
+
+- **跳转顺序**：厂商 action（`AUTOSTART_ACTIONS`）→ ComponentName（`AUTOSTART_COMPONENTS`，小米/华为/OPPO/vivo）→ `openAppDetails` 兜底。非标准入口存在版本差异，不保证跨版本稳定。三星 BatteryActivity 仅为电池管理入口，未验证自启动语义，已从入口及显示关键词中移除。
+- **启发式显示**：`PermissionUtils.needsOemAutostartGuide()` 用 `Build.MANUFACTURER + Build.BRAND` 匹配关键词（xiaomi/redmi/poco/huawei/honor/oppo/realme/oneplus/vivo/iqoo/meizu/letv/smartisan）；命中不代表检测到开关，未命中也不代表设备没有后台限制。没有专用 component 的厂商依靠 action 或应用详情页兜底。
+- **`allGood` 必须带上厂商条件**：`... && (!needsAutostartGuide || autostartConfirmed)`，否则原生机器永远显示「还有一项没做」。
+- **这只是给用户看的自我确认**，不参与上报逻辑——服务能否拉起仍由系统决定。语义上**不是** `AppSettings.autostart`（那是 App 自己的开机自启开关，控制 `BootReceiver` 是否拉起服务），两者只是名字像，KDoc 里都写明了区别。
 
 ---
 

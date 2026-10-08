@@ -1,6 +1,7 @@
 package com.rainy.status.ui.settings
 
 import android.content.Context
+import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rainy.status.R
@@ -21,8 +22,7 @@ import com.rainy.status.util.PermissionUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +62,8 @@ data class KeepAliveUi(
     val ignoringBatteryOptimizations: Boolean = false,
     val canScheduleExactAlarms: Boolean = false,
     val hasNotificationPermission: Boolean = false,
+    /** 本机是否为需要自启动引导的厂商；原生 Android 不显示这一行，见 PermissionUtils.needsOemAutostartGuide */
+    val needsAutostartGuide: Boolean = false,
 )
 
 /**
@@ -82,7 +84,8 @@ class SettingsViewModel @Inject constructor(
      * 应用级作用域：给「失焦即落盘」用。
      *
      * 不能用 viewModelScope —— 用户改完地址直接按返回键时，ViewModel 会被清除、
-     * viewModelScope 随之取消，写入就丢了。appScope 与进程同寿命，写入一定能落地。
+     * viewModelScope 随之取消，写入可能丢失。应用级任务不随页面销毁取消；
+     * 进程终止或存储错误仍可能导致保存失败。
      */
     @Named(ScopeQualifiers.APP) private val appScope: CoroutineScope,
 ) : ViewModel() {
@@ -90,23 +93,45 @@ class SettingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    private enum class Input { ENDPOINT, TOKEN, DEVICE_NAME }
+
     /**
-     * 三个文本框的落盘防抖任务。
-     *
-     * 为什么不用「失焦时提交」：`onFocusChanged` 的回调与 NavHost 的 pop 是竞态的，
-     * 「改完地址直接按返回键」会让协程还没执行就被 `viewModelScope` 取消 → **静默丢输入**，
-     * 而且 `endpointError` 从未被设置，用户只会发现「设置了但没生效」。
-     * 也不能立刻落盘：边输边写会让 `LaunchedEffect(settings.endpoint)` 回灌、
-     * 覆盖用户正在打的字。所以走「边输边防抖落盘」，与首页草稿同一套模式。
-     *
-     * 防抖任务本身也跑 [appScope]（不是 viewModelScope）：`onFocusChanged` 不一定触发
-     * （系统返回手势、弹窗收起时焦点常保持不变），若最后一次输入后 600ms 内离开页面，
-     * 跑在 viewModelScope 的任务会被取消，这次输入就丢了。appScope 与进程同寿命，
-     * 保证「最后一次输入」一定落地。
+     * UI callbacks, debounce validation and queue bookkeeping are all Main-confined.
+     * The application Job survives navigation; DataStore performs its own IO off Main.
+     * Every persistence task waits for its predecessor BEFORE writing, never after.
      */
-    private var endpointJob: Job? = null
-    private var tokenJob: Job? = null
-    private var deviceNameJob: Job? = null
+    private val inputWriter = OrderedInputWriter<Input, UiText>(
+        scope = CoroutineScope(appScope.coroutineContext + Dispatchers.Main.immediate),
+        debounceMillis = COMMIT_DEBOUNCE_MS,
+        queue = inputQueue,
+        validate = { field, value ->
+            when {
+                field == Input.ENDPOINT && value.isEmpty() ->
+                    UiText.Resource(R.string.settings_endpoint_required)
+                field == Input.ENDPOINT && EndpointNormalizer.normalize(value) !is EndpointNormalizer.Result.Valid ->
+                    UiText.Resource(R.string.settings_endpoint_error)
+                field == Input.TOKEN && value.isEmpty() ->
+                    UiText.Resource(R.string.settings_token_required)
+                else -> null
+            }
+        },
+        onValidation = { field, error ->
+            _uiState.update {
+                when (field) {
+                    Input.ENDPOINT -> it.copy(endpointError = error)
+                    Input.TOKEN -> it.copy(tokenError = error)
+                    Input.DEVICE_NAME -> it
+                }
+            }
+        },
+        persist = { field, value ->
+            when (field) {
+                Input.ENDPOINT -> settingsStore.setEndpoint(value)
+                Input.TOKEN -> settingsStore.setToken(value)
+                Input.DEVICE_NAME -> settingsStore.setDeviceName(value)
+            }
+        },
+    )
 
     init {
         viewModelScope.launch {
@@ -136,127 +161,77 @@ class SettingsViewModel @Inject constructor(
                     ignoringBatteryOptimizations = PermissionUtils.isIgnoringBatteryOptimizations(appContext),
                     canScheduleExactAlarms = PermissionUtils.canScheduleExactAlarms(appContext),
                     hasNotificationPermission = PermissionUtils.hasNotificationPermission(appContext),
+                    needsAutostartGuide = PermissionUtils.needsOemAutostartGuide(),
                 )
             )
         }
     }
 
+    // Restore the same raw draft after composition/activity recreation (including invalid input).
+    @MainThread
+    fun endpointDraft(): String? = inputWriter.draftValue(Input.ENDPOINT)
+    @MainThread
+    fun tokenDraft(): String? = inputWriter.draftValue(Input.TOKEN)
+    @MainThread
+    fun deviceNameDraft(): String? = inputWriter.draftValue(Input.DEVICE_NAME)
+
     // ── 服务器 ──
 
-    /**
-     * 地址边输边落盘（防抖 [COMMIT_DEBOUNCE_MS]）。
-     *
-     * 校验错误延后到防抖之后才显示：正在输入时把中间态（`https://` 还没打完）标红
-     * 会把「还在打字」误判成「填错了」。
-     */
-    fun onEndpointChange(value: String) {
-        endpointJob?.cancel()
-        // 用 appScope 而非 viewModelScope：离开页面时 viewModelScope 会被取消，
-        // 最后一次输入若还在防抖窗口里就丢了（onFocusChanged 不保证触发）
-        endpointJob = appScope.launch {
-            delay(COMMIT_DEBOUNCE_MS)
-            commitEndpoint(value)
-        }
-    }
+    /** Debounce and focus commits share one ordered, application-owned persistence queue. */
+    @MainThread
+    fun onEndpointChange(value: String) = inputWriter.edit(Input.ENDPOINT, value)
 
-    /**
-     * 失焦时立刻落盘并取消待执行的防抖任务。
-     *
-     * 这一步是**必须**的：用户改完地址直接按返回键时，`onFocusChanged` 的回调
-     * 可能早于 NavHost 的 pop，若仍等防抖就会被 `viewModelScope` 取消而丢输入。
-     * 因此这里取消防抖并**改走 appScope**，保证写入在 ViewModel 清除过程中也能完成。
-     */
-    fun commitEndpointNow(value: String) {
-        endpointJob?.cancel()
-        endpointJob = null
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            // 报错而不是静默 return：防抖路径（commitEndpoint）对同一输入会提示「必填」，
-            // 这里若什么都不做，用户看到的是「输入框空着、磁盘里还是旧地址、零提示」，
-            // 随后点「连接测试」测的仍是旧地址——与 P1-1 同型的静默陷阱。
-            _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_required)) }
-            return
-        }
-        if (EndpointNormalizer.normalize(trimmed) is EndpointNormalizer.Result.Valid) {
-            appScope.launch { settingsStore.setEndpoint(trimmed) }
-        } else {
-            _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_error)) }
-        }
-    }
+    @MainThread
+    fun commitEndpointNow(value: String) = inputWriter.commitNow(Input.ENDPOINT, value)
 
-    /** 提交地址：非法输入立即提示，合法才落盘 */
-    private suspend fun commitEndpoint(value: String) {
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_required)) }
-            return
-        }
-        when (EndpointNormalizer.normalize(trimmed)) {
-            is EndpointNormalizer.Result.Valid -> {
-                _uiState.update { it.copy(endpointError = null) }
-                settingsStore.setEndpoint(trimmed)
-            }
-            else -> _uiState.update { it.copy(endpointError = UiText.Resource(R.string.settings_endpoint_error)) }
-        }
-    }
+    @MainThread
+    fun onTokenChange(value: String) = inputWriter.edit(Input.TOKEN, value)
 
-    fun onTokenChange(value: String) {
-        tokenJob?.cancel()
-        tokenJob = appScope.launch {
-            delay(COMMIT_DEBOUNCE_MS)
-            commitToken(value)
-        }
-    }
+    @MainThread
+    fun commitTokenNow(value: String) = inputWriter.commitNow(Input.TOKEN, value)
 
-    /** 失焦时立刻落盘（同 [commitEndpointNow] 的理由） */
-    fun commitTokenNow(value: String) {
-        tokenJob?.cancel()
-        tokenJob = null
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            // 同 commitEndpointNow：静默 return 会让「清空 Token → 失焦」变成
-            // 输入框空着、磁盘里仍是旧 Token、零提示，随后测试用的还是旧值。
-            _uiState.update { it.copy(tokenError = UiText.Resource(R.string.settings_token_required)) }
-            return
-        }
-        appScope.launch { settingsStore.setToken(trimmed) }
-    }
+    @MainThread
+    fun onDeviceNameChange(value: String) = inputWriter.edit(Input.DEVICE_NAME, value)
 
-    private suspend fun commitToken(value: String) {
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            _uiState.update { it.copy(tokenError = UiText.Resource(R.string.settings_token_required)) }
-            return
-        }
-        _uiState.update { it.copy(tokenError = null) }
-        settingsStore.setToken(trimmed)
-    }
+    @MainThread
+    fun commitDeviceNameNow(value: String) = inputWriter.commitNow(Input.DEVICE_NAME, value)
 
-    fun onDeviceNameChange(value: String) {
-        deviceNameJob?.cancel()
-        deviceNameJob = appScope.launch {
-            delay(COMMIT_DEBOUNCE_MS)
-            settingsStore.setDeviceName(value.trim())
-        }
-    }
+    /** Do not use persisted old credentials when the latest edited revision is invalid. */
+    @MainThread
+    private suspend fun flushPendingInputs(): Boolean = inputWriter.flush()
 
-    /** 失焦时立刻落盘（设备名没有校验失败态，直接写） */
-    fun commitDeviceNameNow(value: String) {
-        deviceNameJob?.cancel()
-        deviceNameJob = null
-        appScope.launch { settingsStore.setDeviceName(value.trim()) }
-    }
+    private fun inputSaveError(): UiText = UiText.Resource(
+        if (inputQueue.hasFailures()) R.string.settings_save_failed
+        else R.string.settings_test_not_configured
+    )
 
+    @MainThread
     fun testConnection() {
+        if (_uiState.value.testState == TestState.Testing) return
+        _uiState.update { it.copy(testState = TestState.Testing) }
         viewModelScope.launch {
-            _uiState.update { it.copy(testState = TestState.Testing) }
-            val state = when (val result = repository.testConnection()) {
-                is ConnectionTestResult.Ok -> TestState.Ok(result.httpCode)
-                is ConnectionTestResult.Unauthorized -> TestState.Unauthorized(result.httpCode)
-                is ConnectionTestResult.Failed -> TestState.Failed(describeError(result.error))
-                ConnectionTestResult.NotConfigured -> TestState.NotConfigured
+            try {
+                // Busy includes storage waits: repeated taps must not queue real heartbeats.
+                if (!flushPendingInputs()) {
+                    _uiState.update {
+                        it.copy(testState = if (inputQueue.hasFailures()) {
+                            TestState.Failed(UiText.Resource(R.string.settings_save_failed))
+                        } else TestState.NotConfigured)
+                    }
+                    return@launch
+                }
+                val state = when (val result = repository.testConnection()) {
+                    is ConnectionTestResult.Ok -> TestState.Ok(result.httpCode)
+                    is ConnectionTestResult.Unauthorized -> TestState.Unauthorized(result.httpCode)
+                    is ConnectionTestResult.Failed -> TestState.Failed(describeError(result.error))
+                    ConnectionTestResult.NotConfigured -> TestState.NotConfigured
+                }
+                _uiState.update { it.copy(testState = state) }
+            } finally {
+                _uiState.update {
+                    if (it.testState == TestState.Testing) it.copy(testState = TestState.Idle) else it
+                }
             }
-            _uiState.update { it.copy(testState = state) }
         }
     }
 
@@ -264,6 +239,13 @@ class SettingsViewModel @Inject constructor(
 
     fun setEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            // 同 testConnection：下面要读 settingsStore 判 configured，
+            // 输入框里的新地址/Token 必须先落盘，否则「刚填好就打开开关」会被判成未配置。
+            // 开启时若输入无效就停下：免得用旧配置把服务拉起来
+            if (enabled && !flushPendingInputs()) {
+                _uiState.update { it.copy(message = inputSaveError()) }
+                return@launch
+            }
             if (enabled) {
                 // 先校验配置：地址/Token 都没填就开启只会得到一串失败日志
                 val settings = settingsStore.settings.first()
@@ -285,6 +267,16 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsStore.setAutostart(value) }
     }
 
+    /**
+     * 用户自述已在系统里打开「自启动」。
+     *
+     * 与首页同理：仅记录可撤销的用户确认，不读取或修改系统开关。
+     * 见 [AppSettings.autostartConfirmed]。
+     */
+    fun confirmAutostart(confirmed: Boolean) {
+        viewModelScope.launch { settingsStore.setAutostartConfirmed(confirmed) }
+    }
+
     fun setNotifyEnabled(value: Boolean) {
         viewModelScope.launch { settingsStore.setNotifyEnabled(value) }
     }
@@ -294,6 +286,11 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(reporting = true) }
         viewModelScope.launch {
             try {
+                // 同 testConnection/setEnabled：report() 也读磁盘取地址与 Token
+                if (!flushPendingInputs()) {
+                    _uiState.update { it.copy(message = inputSaveError()) }
+                    return@launch
+                }
                 val message = when (val outcome = repository.report(ReportTrigger.MANUAL)) {
                     is ReportOutcome.Success -> UiText.Resource(R.string.home_report_success)
                     is ReportOutcome.NotConfigured -> UiText.Resource(R.string.settings_test_not_configured)
@@ -341,7 +338,15 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(message = null) }
     }
 
+    override fun onCleared() {
+        // Submit synchronously before a replacement screen can read stale persisted settings.
+        inputWriter.commitAll()
+        super.onCleared()
+    }
+
     private companion object {
+        // One application-wide sequence also orders writes from a recently destroyed screen.
+        val inputQueue = OrderedWriteQueue()
         /**
          * 三个文本框的落盘防抖。
          *

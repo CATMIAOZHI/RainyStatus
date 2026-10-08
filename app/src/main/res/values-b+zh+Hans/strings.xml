@@ -58,6 +58,10 @@
     <string name="home_keepalive_notification">通知权限</string>
     <string name="home_keepalive_notification_ok">已授权</string>
     <string name="home_keepalive_notification_no">未授权，常驻通知不可见</string>
+    <string name="home_keepalive_autostart">系统自启动</string>
+    <string name="home_keepalive_autostart_ok">你已确认（非 App 检测结果）</string>
+    <string name="keepalive_action_revoke">撤销确认</string>
+    <string name="home_keepalive_autostart_no">未确认，请检查系统设置</string>
     <string name="home_keepalive_hint">小米 / HyperOS 还需开启「自启动」并在多任务卡片里加锁。不加入白名单的话，10 分钟精度无法保证。</string>
     <string name="home_view_page">查看状态页</string>
     <string name="home_view_page_missing">请先填写上报地址</string>
@@ -85,6 +89,7 @@
     <string name="settings_test_unauthorized">Token 被拒绝（HTTP 401），请确认与 AUTH_TOKEN 一致。</string>
     <string name="settings_test_error">失败：%1$s</string>
     <string name="settings_test_not_configured">请先填写地址和 Token</string>
+    <string name="settings_save_failed">设置保存失败。请检查可用存储空间，重新填写地址、Token 和设备名称后重试。</string>
 
     <string name="settings_enabled">后台常驻上报</string>
     <string name="settings_enabled_hint">由前台服务持续发送心跳</string>
@@ -112,7 +117,7 @@
     <string name="settings_keepalive_battery">电池优化白名单</string>
     <string name="settings_keepalive_alarm">精确闹钟</string>
     <string name="settings_keepalive_notification">通知权限</string>
-    <string name="settings_keepalive_autostart_app">打开自启动设置</string>
+    <string name="settings_keepalive_autostart">系统自启动</string>
     <string name="settings_keepalive_autostart_hint">HyperOS / MIUI：设置 → 应用 → 应用管理 → 雨晴Status → 自启动。另外在多任务卡片里下拉加锁，并把省电策略设为「无限制」。</string>
 
     <string name="settings_theme">主题</string>
@@ -171,6 +176,11 @@
 
     <string name="keepalive_action_grant">去授权</string>
     <string name="keepalive_action_done">已完成</string>
+    <string name="keepalive_action_confirm">我已开启</string>
+    <string name="keepalive_action_open">去查看</string>
     <string name="keepalive_state_ok">已授权</string>
     <string name="keepalive_state_missing">未授权</string>
+    <!-- 自启动是「系统开关」不是「权限授权」，用词分开，避免读起来像同一件事 -->
+    <string name="keepalive_state_on">你已确认</string>
+    <string name="keepalive_state_off">未确认</string>
 </resources>

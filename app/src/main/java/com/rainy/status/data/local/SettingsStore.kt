@@ -35,6 +35,19 @@ data class AppSettings(
     val deviceName: String = "",
     val moodEnabled: Boolean = true,
     val themeMode: String = THEME_SYSTEM,
+    /**
+     * 用户**自述**已在系统里打开厂商的「自启动」开关。
+     *
+     * 注意与上面的 [autostart] 区分（两者名字像，但语义完全不同）：
+     * - [autostart] 是 App 自己的开关，控制 `BootReceiver` 收到 BOOT_COMPLETED 后是否拉起服务；
+     * - 本字段记录的是**系统层面**那个开关（HyperOS 的「自启动」、EMUI 的「自启动管理」…）。
+     *
+     * 项目没有可靠的跨厂商公开查询接口，也未采用厂商非公开接口。
+     * 本机 shell 的 appops 观察不代表普通 App 的访问权限测试，不能推出绝对不可读。
+     * 因此这里只保存用户确认，不是系统状态；false 表示未确认，不表示未开启。
+     * 用户可随时撤销确认；确认或撤销都不修改系统开关，也不控制上报。
+     */
+    val autostartConfirmed: Boolean = false,
 ) {
     /** 地址与 Token 都填了才能上报 */
     val configured: Boolean get() = endpoint.isNotBlank() && token.isNotBlank()
@@ -77,6 +90,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             deviceName = prefs[KEY_DEVICE_NAME] ?: "",
             moodEnabled = prefs[KEY_MOOD_ENABLED] ?: true,
             themeMode = prefs[KEY_THEME] ?: AppSettings.THEME_SYSTEM,
+            autostartConfirmed = prefs[KEY_AUTOSTART_CONFIRMED] ?: false,
         )
     }
 
@@ -95,8 +109,11 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
     suspend fun setIncludeNetwork(value: Boolean) = put { it[KEY_INCLUDE_NETWORK] = value }
     suspend fun setDeviceName(value: String) =
         put { it[KEY_DEVICE_NAME] = value.trim().take(MAX_DEVICE_NAME_LENGTH) }
-
     suspend fun setMoodEnabled(value: Boolean) = put { it[KEY_MOOD_ENABLED] = value }
+
+    /** 保存或撤销用户确认；不读取或修改系统「自启动」开关。 */
+    suspend fun setAutostartConfirmed(value: Boolean) = put { it[KEY_AUTOSTART_CONFIRMED] = value }
+
     suspend fun setThemeMode(value: String) = put {
         it[KEY_THEME] = value.takeIf { v ->
             v == AppSettings.THEME_SYSTEM || v == AppSettings.THEME_LIGHT || v == AppSettings.THEME_DARK
@@ -124,6 +141,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
         private val KEY_MOOD_ENABLED = booleanPreferencesKey("mood_enabled")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
+        /** 系统「自启动」的可撤销用户确认，非系统状态；见 [AppSettings.autostartConfirmed] */
+        private val KEY_AUTOSTART_CONFIRMED = booleanPreferencesKey("autostart_confirmed")
     }
 }
 

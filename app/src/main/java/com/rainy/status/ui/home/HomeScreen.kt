@@ -191,6 +191,14 @@ fun HomeScreen(
             }
 
             item {
+                HistoryCard(
+                    samples = state.history,
+                    historyEnabled = state.settings.historyEnabled,
+                    onEnableHistory = { viewModel.setHistoryEnabled(true) },
+                )
+            }
+
+            item {
                 KeepAliveCard(
                     status = state.keepAlive,
                     autostartConfirmed = state.settings.autostartConfirmed,

@@ -3,6 +3,7 @@ package com.rainy.status.data.repository
 import com.rainy.status.data.debug.DebugLog
 import com.rainy.status.data.device.DeviceStateReader
 import com.rainy.status.data.local.AppSettings
+import com.rainy.status.data.local.HistoryStore
 import com.rainy.status.data.local.RuntimeState
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
@@ -11,6 +12,7 @@ import com.rainy.status.data.remote.ReportError
 import com.rainy.status.data.remote.StatusApi
 import com.rainy.status.data.remote.dto.HeartbeatRequestDto
 import com.rainy.status.data.remote.dto.MoodRequestDto
+import com.rainy.status.domain.history.BatterySample
 import com.rainy.status.domain.model.DeviceSnapshot
 import com.rainy.status.domain.model.FieldOptions
 import com.rainy.status.domain.model.ReportTrigger
@@ -62,6 +64,7 @@ sealed interface ConnectionTestResult {
 class StatusRepository(
     private val settingsStore: SettingsStore,
     private val runtimeStateStore: RuntimeStateStore,
+    private val historyStore: HistoryStore,
     private val api: StatusApi,
     private val deviceReader: DeviceStateReader,
     private val json: Json,
@@ -130,6 +133,21 @@ class StatusRepository(
         val intervalMs = WriteBudget.effectiveIntervalMs(settings.intervalMs, writes)
 
         val snapshot = readDeviceSnapshot(now)
+
+        // 本地历史先落一条，再走门控：曲线的意义就是「没上报的那些时刻也在」，
+        // 若放在门控之后，被挡下的那一轮（大多数轮次）就什么都不记，曲线会变成
+        // 只有「电量涨了 3%」那些点的稀疏折线。
+        // 只在本机写 DataStore，不产生任何网络请求／KV 写，因此不必计入写预算。
+        if (settings.historyEnabled) {
+            // 本地历史**绝不能连累心跳**：磁盘写失败（空间不足、存储损坏）时
+            // 只丢一个画图的点，该发的那条心跳照样发。
+            runCatching {
+                historyStore.record(
+                    sample = BatterySample(t = now, b = snapshot.batteryPercent, c = snapshot.charging),
+                    now = now,
+                )
+            }.onFailure { DebugLog.w(TAG, "History sample dropped: ${it.message}") }
+        }
 
         val gate = GateInput(
             trigger = trigger,

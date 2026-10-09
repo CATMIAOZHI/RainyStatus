@@ -66,12 +66,29 @@
     <string name="home_view_page">查看狀態頁</string>
     <string name="home_view_page_missing">請先填寫上報地址</string>
 
+    <!-- ══════════ 電量歷史（本機） ══════════ -->
+    <string name="home_history_title">電量歷史</string>
+    <string name="home_history_range_24h">24 小時</string>
+    <string name="home_history_range_7d">7 天</string>
+    <string name="home_history_axis_now">現在</string>
+    <string name="home_history_summary_24h">最近 %1$d%% · 最低 %2$d%% · 最高 %3$d%% · 充電 %4$d 次</string>
+    <string name="home_history_day_count">%1$d 次</string>
+    <string name="home_history_no_value">—</string>
+    <string name="home_history_legend_24h">綠帶＝正在充電；斷口＝這段時間沒有記錄</string>
+    <string name="home_history_legend_7d">柱＝當天的最低–最高電量，柱下數字＝當天充電次數</string>
+    <string name="home_history_empty">還沒有本機記錄</string>
+    <string name="home_history_empty_hint">每次上報都會記一個點，最多保留 7 天</string>
+    <string name="home_history_disabled">本機記錄已關閉</string>
+    <string name="home_history_disabled_hint">只存在這台手機上，不會上傳，也不佔雲端額度。</string>
+    <string name="home_history_enable">開啟記錄</string>
+
     <!-- ══════════ 設定 ══════════ -->
     <string name="settings_title">設定</string>
     <string name="settings_group_server">伺服器</string>
     <string name="settings_group_report">上報</string>
     <string name="settings_group_fields">上報欄位</string>
     <string name="settings_group_mood">心情</string>
+    <string name="settings_group_local">本機記錄</string>
     <string name="settings_group_keepalive">保活</string>
     <string name="settings_group_appearance">外觀</string>
     <string name="settings_group_about">關於</string>
@@ -113,6 +130,9 @@
 
     <string name="settings_mood_enabled">分享心情</string>
     <string name="settings_mood_hint">會顯示在狀態頁上，只在你按下傳送時才上傳。</string>
+
+    <string name="settings_history">記錄本機電量歷史</string>
+    <string name="settings_history_hint">只存在這台手機上；首頁的曲線圖用它，最多保留 7 天。</string>
 
     <string name="settings_keepalive_battery">電池最佳化白名單</string>
     <string name="settings_keepalive_alarm">精確鬧鐘</string>
@@ -173,6 +193,7 @@
 
     <!-- ══════════ 無障礙描述 ══════════ -->
     <string name="cd_battery_progress">電量 %1$d%%</string>
+    <string name="cd_history_chart">電量歷史曲線，最低 %1$d%%，最高 %2$d%%</string>
     <string name="cd_open_settings">開啟設定</string>
 
     <!-- ══════════ 保活動作 ══════════ -->

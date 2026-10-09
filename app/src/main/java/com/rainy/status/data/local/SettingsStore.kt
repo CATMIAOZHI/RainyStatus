@@ -34,6 +34,14 @@ data class AppSettings(
     val includeNetwork: Boolean = false,
     val deviceName: String = "",
     val moodEnabled: Boolean = true,
+    /**
+     * 是否在本机记录电量历史（首页曲线图的数据源）。
+     *
+     * **默认关**：与「云端采集 / 公开显示」一样，属于用户必须显式打开的一项
+     * （见 `docs/roadmap.md` 的隐私默认值）。数据只留在本机、不上传，
+     * 但既然承诺了「三个开关分开、默认全关」，默认值就不能悄悄改成开。
+     */
+    val historyEnabled: Boolean = false,
     val themeMode: String = THEME_SYSTEM,
     /**
      * 用户**自述**已在系统里打开厂商的「自启动」开关。
@@ -89,6 +97,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             includeNetwork = prefs[KEY_INCLUDE_NETWORK] ?: false,
             deviceName = prefs[KEY_DEVICE_NAME] ?: "",
             moodEnabled = prefs[KEY_MOOD_ENABLED] ?: true,
+            historyEnabled = prefs[KEY_HISTORY_ENABLED] ?: false,
             themeMode = prefs[KEY_THEME] ?: AppSettings.THEME_SYSTEM,
             autostartConfirmed = prefs[KEY_AUTOSTART_CONFIRMED] ?: false,
         )
@@ -110,6 +119,9 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
     suspend fun setDeviceName(value: String) =
         put { it[KEY_DEVICE_NAME] = value.trim().take(MAX_DEVICE_NAME_LENGTH) }
     suspend fun setMoodEnabled(value: Boolean) = put { it[KEY_MOOD_ENABLED] = value }
+
+    /** 本地电量历史开关；关掉只是不再记录，已记录的样本保留（可随时再打开） */
+    suspend fun setHistoryEnabled(value: Boolean) = put { it[KEY_HISTORY_ENABLED] = value }
 
     /** 保存或撤销用户确认；不读取或修改系统「自启动」开关。 */
     suspend fun setAutostartConfirmed(value: Boolean) = put { it[KEY_AUTOSTART_CONFIRMED] = value }
@@ -140,6 +152,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val KEY_INCLUDE_NETWORK = booleanPreferencesKey("field_network")
         private val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
         private val KEY_MOOD_ENABLED = booleanPreferencesKey("mood_enabled")
+        private val KEY_HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
         /** 系统「自启动」的可撤销用户确认，非系统状态；见 [AppSettings.autostartConfirmed] */
         private val KEY_AUTOSTART_CONFIRMED = booleanPreferencesKey("autostart_confirmed")

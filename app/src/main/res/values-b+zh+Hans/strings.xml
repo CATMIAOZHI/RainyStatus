@@ -66,12 +66,29 @@
     <string name="home_view_page">查看状态页</string>
     <string name="home_view_page_missing">请先填写上报地址</string>
 
+    <!-- ══════════ 电量历史（本机） ══════════ -->
+    <string name="home_history_title">电量历史</string>
+    <string name="home_history_range_24h">24 小时</string>
+    <string name="home_history_range_7d">7 天</string>
+    <string name="home_history_axis_now">现在</string>
+    <string name="home_history_summary_24h">最近 %1$d%% · 最低 %2$d%% · 最高 %3$d%% · 充电 %4$d 次</string>
+    <string name="home_history_day_count">%1$d 次</string>
+    <string name="home_history_no_value">—</string>
+    <string name="home_history_legend_24h">绿带＝正在充电；断口＝这段时间没有记录</string>
+    <string name="home_history_legend_7d">柱＝当天的最低–最高电量，柱下数字＝当天充电次数</string>
+    <string name="home_history_empty">还没有本机记录</string>
+    <string name="home_history_empty_hint">每次上报都会记一个点，最多保留 7 天</string>
+    <string name="home_history_disabled">本地记录已关闭</string>
+    <string name="home_history_disabled_hint">只存在这台手机上，不会上传，也不占云端额度。</string>
+    <string name="home_history_enable">开启记录</string>
+
     <!-- ══════════ 设置 ══════════ -->
     <string name="settings_title">设置</string>
     <string name="settings_group_server">服务器</string>
     <string name="settings_group_report">上报</string>
     <string name="settings_group_fields">上报字段</string>
     <string name="settings_group_mood">心情</string>
+    <string name="settings_group_local">本机记录</string>
     <string name="settings_group_keepalive">保活</string>
     <string name="settings_group_appearance">外观</string>
     <string name="settings_group_about">关于</string>
@@ -113,6 +130,9 @@
 
     <string name="settings_mood_enabled">分享心情</string>
     <string name="settings_mood_hint">会显示在状态页上，只在你点发送时才上传。</string>
+
+    <string name="settings_history">记录本机电量历史</string>
+    <string name="settings_history_hint">只存在这台手机上；首页的曲线图用它，最多保留 7 天。</string>
 
     <string name="settings_keepalive_battery">电池优化白名单</string>
     <string name="settings_keepalive_alarm">精确闹钟</string>
@@ -172,6 +192,7 @@
     <string name="error_unknown">未知错误，详情见调试日志</string>
     <!-- ══════════ 无障碍描述 ══════════ -->
     <string name="cd_battery_progress">电量 %1$d%%</string>
+    <string name="cd_history_chart">电量历史曲线，最低 %1$d%%，最高 %2$d%%</string>
     <string name="cd_open_settings">打开设置</string>
 
     <string name="keepalive_action_grant">去授权</string>

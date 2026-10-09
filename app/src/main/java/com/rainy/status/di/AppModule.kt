@@ -3,8 +3,10 @@ package com.rainy.status.di
 import android.content.Context
 import com.rainy.status.BuildConfig
 import com.rainy.status.data.device.DeviceStateReader
+import com.rainy.status.data.local.HistoryStore
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
+import com.rainy.status.data.local.historyDataStore
 import com.rainy.status.data.local.runtimeStateDataStore
 import com.rainy.status.data.local.settingsDataStore
 import com.rainy.status.data.remote.ApiJson
@@ -34,6 +36,7 @@ import javax.inject.Singleton
 object DataStoreQualifiers {
     const val SETTINGS = "dataStore.settings"
     const val RUNTIME_STATE = "dataStore.runtimeState"
+    const val HISTORY = "dataStore.history"
 }
 
 /** 长于组件生命周期的协程作用域限定符 */
@@ -79,6 +82,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    @Named(DataStoreQualifiers.HISTORY)
+    fun provideHistoryDataStore(
+        @ApplicationContext context: Context
+    ) = context.historyDataStore
+
+    @Provides
+    @Singleton
     fun provideSettingsStore(
         @Named(DataStoreQualifiers.SETTINGS) dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>
     ): SettingsStore = SettingsStore(dataStore)
@@ -91,6 +101,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideHistoryStore(
+        @Named(DataStoreQualifiers.HISTORY) dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>
+    ): HistoryStore = HistoryStore(dataStore)
+
+    @Provides
+    @Singleton
     fun provideDeviceStateReader(@ApplicationContext context: Context): DeviceStateReader =
         DeviceStateReader(context)
 
@@ -99,12 +115,14 @@ object AppModule {
     fun provideStatusRepository(
         settingsStore: SettingsStore,
         runtimeStateStore: RuntimeStateStore,
+        historyStore: HistoryStore,
         api: StatusApi,
         deviceReader: DeviceStateReader,
         json: Json,
     ): StatusRepository = StatusRepository(
         settingsStore = settingsStore,
         runtimeStateStore = runtimeStateStore,
+        historyStore = historyStore,
         api = api,
         deviceReader = deviceReader,
         json = json,

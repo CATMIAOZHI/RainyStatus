@@ -425,6 +425,18 @@ fun SettingsScreen(
                 }
             }
 
+            // ── 本机记录 ──
+            item {
+                SettingsCard(stringResource(R.string.settings_group_local)) {
+                    SwitchRow(
+                        title = stringResource(R.string.settings_history),
+                        subtitle = stringResource(R.string.settings_history_hint),
+                        checked = settings.historyEnabled,
+                        onCheckedChange = { viewModel.setHistoryEnabled(it) }
+                    )
+                }
+            }
+
             // ── 保活 ──
             item {
                 SettingsCard(stringResource(R.string.settings_group_keepalive)) {

@@ -66,6 +66,21 @@
     <string name="home_keepalive_hint">On Xiaomi / HyperOS, also enable autostart and lock the app in Recents. Without the whitelist, exact 10-minute timing is not achievable.</string>
     <string name="home_view_page">View status page</string>
     <string name="home_view_page_missing">Set the server address first</string>
+    <!-- ══════════ 电量历史（本机） ══════════ -->
+    <string name="home_history_title">Battery history</string>
+    <string name="home_history_range_24h">24 h</string>
+    <string name="home_history_range_7d">7 d</string>
+    <string name="home_history_axis_now">Now</string>
+    <string name="home_history_summary_24h">Latest %1$d%% · low %2$d%% · high %3$d%% · charges: %4$d</string>
+    <string name="home_history_day_count">%1$d</string>
+    <string name="home_history_no_value">—</string>
+    <string name="home_history_legend_24h">Green bands = charging · gaps = nothing was reported</string>
+    <string name="home_history_legend_7d">Bar = daily low–high battery range · number below = charge sessions that day</string>
+    <string name="home_history_empty">No local history yet</string>
+    <string name="home_history_empty_hint">One point per report, kept for up to 7 days</string>
+    <string name="home_history_disabled">Local history is off</string>
+    <string name="home_history_disabled_hint">Kept on this phone only. It is never uploaded and costs no cloud quota.</string>
+    <string name="home_history_enable">Turn on</string>
 
     <!-- ══════════ 设置 ══════════ -->
     <string name="settings_title">Settings</string>
@@ -73,6 +88,7 @@
     <string name="settings_group_report">Reporting</string>
     <string name="settings_group_fields">Reported fields</string>
     <string name="settings_group_mood">Mood</string>
+    <string name="settings_group_local">Local data</string>
     <string name="settings_group_keepalive">Keep-alive</string>
     <string name="settings_group_appearance">Appearance</string>
     <string name="settings_group_about">About</string>
@@ -114,6 +130,9 @@
 
     <string name="settings_mood_enabled">Share mood</string>
     <string name="settings_mood_hint">Shown on your status page. Only sent when you press send.</string>
+
+    <string name="settings_history">Keep local battery history</string>
+    <string name="settings_history_hint">Stored on this phone only — the chart on the home screen reads it (up to 7 days).</string>
 
     <string name="settings_keepalive_battery">Battery optimization whitelist</string>
     <string name="settings_keepalive_alarm">Exact alarms</string>
@@ -177,6 +196,7 @@
 
     <!-- ══════════ 无障碍描述 ══════════ -->
     <string name="cd_battery_progress">Battery level %1$d percent</string>
+    <string name="cd_history_chart">Battery history chart, low %1$d%%, high %2$d%%</string>
     <string name="cd_open_settings">Open settings</string>
 
     <!-- ══════════ 保活动作 ══════════ -->

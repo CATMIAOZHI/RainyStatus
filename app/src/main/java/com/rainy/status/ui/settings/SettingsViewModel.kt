@@ -319,6 +319,16 @@ class SettingsViewModel @Inject constructor(
 
     fun setMoodEnabled(value: Boolean) = viewModelScope.launch { settingsStore.setMoodEnabled(value) }
 
+    // ── 本机记录 ──
+
+    /**
+     * 本机电量历史开关。
+     *
+     * 关掉只是不再记录，**已记录的样本保留**：用户可能只是想省点磁盘写入，
+     * 顺手清空历史会让人以为「关掉＝数据没了」。要清空是另一件事，见 `docs/roadmap.md`。
+     */
+    fun setHistoryEnabled(value: Boolean) = viewModelScope.launch { settingsStore.setHistoryEnabled(value) }
+
     // ── 外观 / 语言 ──
 
     fun setThemeMode(mode: String) = viewModelScope.launch { settingsStore.setThemeMode(mode) }

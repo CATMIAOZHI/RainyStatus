@@ -34,7 +34,7 @@ Redmi K80 Pro                      Cloudflare                       访客
 - 默认**无数据库**：**1 个 Worker + 1 个 KV namespace + 1 个静态资源目录**。
 - 公开网页做成 **静态资源**（Cloudflare 官方：*Requests to static assets are free and unlimited*）→ 网页浏览量不吃任何额度；即使免费额度耗尽（错误码 `1027`），**网页照常打开、只有 API 报错**。
 - v1.2 起：**网页云端图表 + 心情历史已实现，但默认全关**——D1 分层聚合、Cron 只预生成导出、公开接口只读 1 行预生成 JSON、可选 Turnstile 人机验证。契约见 `docs/api.md` 的 `GET /api/history`；抗打边界、额度账与 10 条踩坑见 `docs/roadmap.md`。
-- **App 本地图表（独立 DataStore + Canvas 手绘）待做**，见 `docs/roadmap.md`。
+- **App 本地图表（独立 DataStore + Canvas 手绘）已实现**（默认关，可在设置 → 本机记录里打开）：24 小时折线与 7 天每日区间柱，见 `README.md` 的「App · 本机电量历史」。
 
 ---
 

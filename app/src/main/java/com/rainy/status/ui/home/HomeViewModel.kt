@@ -6,11 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.rainy.status.R
 import com.rainy.status.data.device.DeviceStateReader
 import com.rainy.status.data.local.AppSettings
+import com.rainy.status.data.local.HistoryStore
 import com.rainy.status.data.local.RuntimeState
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.repository.ReportOutcome
 import com.rainy.status.data.repository.StatusRepository
+import com.rainy.status.domain.history.BatterySample
 import com.rainy.status.domain.model.DeviceSnapshot
 import com.rainy.status.domain.model.MoodEmoji
 import com.rainy.status.domain.model.ReportTrigger
@@ -38,6 +40,13 @@ data class HomeUiState(
     val runtime: RuntimeState = RuntimeState(),
     /** 最近一次本地采样，用于卡片上的「当前电量」 */
     val snapshot: DeviceSnapshot? = null,
+    /**
+     * 本机电量历史（最多 7 天）。
+     *
+     * 与 [snapshot] 的区别：snapshot 是「此刻」，这里是「这段时间」；
+     * 图表卡片的两个时间档都从这份数据里切窗口。
+     */
+    val history: List<BatterySample> = emptyList(),
     val throttled: Boolean = false,
     val keepAlive: KeepAliveStatus = KeepAliveStatus(),
     /**
@@ -83,6 +92,7 @@ class HomeViewModel @Inject constructor(
     private val repository: StatusRepository,
     private val settingsStore: SettingsStore,
     private val runtimeStateStore: RuntimeStateStore,
+    private val historyStore: HistoryStore,
     private val deviceReader: DeviceStateReader,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -101,6 +111,9 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(throttled = repository.isThrottled()) }
+        }
+        viewModelScope.launch {
+            historyStore.samples.collect { samples -> _uiState.update { it.copy(history = samples) } }
         }
         refreshSnapshot()
         refreshKeepAlive()
@@ -169,6 +182,16 @@ class HomeViewModel @Inject constructor(
                 StatusHeartbeatService.stop(appContext)
             }
         }
+    }
+
+    /**
+     * 打开 / 关闭本机电量历史记录。
+     *
+     * 图表卡片上的「开启记录」直接走这里，用户不必先去设置页绕一圈；
+     * 与设置页的开关读写同一个 DataStore 字段，两处不会打架。
+     */
+    fun setHistoryEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setHistoryEnabled(enabled) }
     }
 
     /**

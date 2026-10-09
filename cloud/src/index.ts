@@ -1,55 +1,90 @@
-// Worker 入口：路由分发 + 错误兜底
+// Worker 入口：路由分发 + 定时任务 + 错误兜底
 //
 // 路由表：
 //   GET  /                 → 静态资源（免费不限量，不经此代码）
 //   GET  /api/health       → 探活（无需鉴权，不碰 KV）
-//   GET  /api/status       → 公开只读状态
+//   GET  /api/status       → 公开只读状态（30 秒机房内缓存，见 routes/status.ts）
+//   GET  /api/history      → 公开只读图表数据（需 Turnstile，读预生成导出 1 行）
 //   POST /api/heartbeat    → 上报心跳（需 Bearer）
 //   POST /api/mood         → 上报心情（需 Bearer）
+//   scheduled              → 生成历史导出 + 清理过期数据
 //
 // 静态资源优先（run_worker_first 默认 false）：只有未命中静态资源的请求才进来。
 // 好处：免费额度耗尽（错误码 1027）时网页仍能打开，只有 API 报错。
 
+import { historyConfig, siteConfig } from './config';
+import { runHistoryMaintenance } from './jobs/history';
 import { handleHealth } from './routes/health';
 import { handleHeartbeat } from './routes/heartbeat';
+import { handleHistory } from './routes/history';
 import { handleMood } from './routes/mood';
 import { handleStatus } from './routes/status';
 import { jsonError, methodNotAllowed } from './lib/response';
 import type { Env } from './types';
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
 
+    /**
+     * HEAD 一律不带 body（协议要求）。
+     *
+     * 在入口统一收口，而不是让每个路由各自记得去处理：路由多一条、错误分支多一个，
+     * 漏一个就是「HEAD 返回了 body」这种只在特定客户端上才暴露的问题。
+     * （routes/status.ts 里还针对缓存命中单独做过一次，两层都无害。）
+     */
+    const finish = (response: Response): Response =>
+      request.method === 'HEAD' ? new Response(null, { status: response.status, headers: response.headers }) : response;
+
     // 同源部署，不发任何 CORS 头；非浏览器客户端由 Bearer token 挡住
     if (request.method === 'OPTIONS') {
-      return methodNotAllowed('GET, POST');
+      return finish(methodNotAllowed('GET, POST'));
     }
 
     try {
+      // 这里必须 await：不 await 的话处理函数内部抛出的异步异常不会回到这个 try 里，
+      // 而是变成运行时的未处理拒绝——那就绕过了「绝不泄露内部细节」的兜底。
       switch (path) {
         case '/api/health':
-          return handleHealth(request, env);
+          return finish(await handleHealth(request, env));
         case '/api/status':
-          return handleStatus(request, env);
+          return finish(await handleStatus(request, env, ctx));
+        case '/api/history':
+          return finish(await handleHistory(request, env));
         case '/api/heartbeat':
-          return handleHeartbeat(request, env);
+          return finish(await handleHeartbeat(request, env, ctx));
         case '/api/mood':
-          return handleMood(request, env);
+          return finish(await handleMood(request, env, ctx));
         default:
           break;
       }
 
       if (path.startsWith('/api/')) {
-        return jsonError(404, 'not_found', 'Unknown API endpoint');
+        return finish(jsonError(404, 'not_found', 'Unknown API endpoint'));
       }
 
       // 理论上到不了这里（静态资源优先命中）；兜底返回 404 而不是抛异常
-      return jsonError(404, 'not_found', 'Not found');
+      return finish(jsonError(404, 'not_found', 'Not found'));
     } catch {
       // 绝不回显内部异常细节
-      return jsonError(500, 'internal_error', 'Unexpected error');
+      return finish(jsonError(500, 'internal_error', 'Unexpected error'));
     }
+  },
+
+  /**
+   * 定时任务（wrangler.jsonc 的 triggers.crons）。
+   *
+   * 只做两件事：把当前窗口的图表数据预生成成 JSON、清理过期数据。
+   * **聚合不在这里**——它跟着心跳走，避免「原始数据已清理但还没汇总」的窗口。
+   */
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const config = historyConfig(env);
+    // 即使一个档位都没公开，也要跑：清理必须继续，否则原始数据会无限增长
+    if (!config.enabled && !config.collect) return;
+
+    // mood 是否进导出跟着站点的公开配置走：服务端决定，不能只靠前端隐藏
+    const includeMood = siteConfig(env).showMood;
+    await runHistoryMaintenance(env, Date.now(), config.ranges, includeMood);
   },
 } satisfies ExportedHandler<Env>;

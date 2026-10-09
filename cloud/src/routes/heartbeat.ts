@@ -7,13 +7,14 @@
 // 4. 不设 TTL
 
 import { nextExpectedMs } from '../config';
+import { recordHeartbeatHistory } from '../jobs/history';
 import { isAuthorized } from '../lib/auth';
 import { writeDeviceStatus } from '../lib/kv';
 import { jsonError, jsonOk, methodNotAllowed } from '../lib/response';
 import { readJson, validateHeartbeat } from '../lib/validate';
 import { SCHEMA_VERSION, type DeviceStatus, type Env } from '../types';
 
-export async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
+export async function handleHeartbeat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== 'POST') {
     return methodNotAllowed('POST');
   }
@@ -55,6 +56,21 @@ export async function handleHeartbeat(request: Request, env: Env): Promise<Respo
   } catch {
     // 不泄露内部异常细节；可能是 KV 写额度耗尽
     return jsonError(500, 'internal_error', 'Failed to persist heartbeat');
+  }
+
+  // 历史写入放在响应之后：不增加上报延迟，失败也不改变这次心跳的结果。
+  // 顺序很重要——先 KV（当前状态）后 D1（历史），当前状态永远不会被历史拖累。
+  if (env.HISTORY_DB) {
+    const db = env.HISTORY_DB;
+    ctx.waitUntil(
+      recordHeartbeatHistory(env, db, now, {
+        batteryPercent: status.batteryPercent,
+        charging: status.charging,
+        chargeSource: status.chargeSource,
+      }).catch(() => {
+        // 静默降级：D1 出问题不该让手机的重试逻辑变得更复杂
+      }),
+    );
   }
 
   return jsonOk({

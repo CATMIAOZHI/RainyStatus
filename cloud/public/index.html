@@ -78,6 +78,35 @@
       </div>
     </div>
 
+    <section class="chart" id="chartSection" hidden>
+      <div class="chart-head">
+        <h2 class="section-title" id="chartTitle">电量 · 24 小时</h2>
+        <button type="button" class="chart-load" id="chartLoad">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M8.8 12.2 11 14.4l4.2-4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="chartLoadText">加载图表</span>
+        </button>
+      </div>
+      <p class="chart-hint" id="chartHint"></p>
+
+      <div class="chart-challenge" id="chartChallenge" hidden></div>
+
+      <div class="chart-body" id="chartBody" hidden>
+        <p class="chart-summary" id="chartSummary"></p>
+        <svg class="chart-svg" id="chartSvg" viewBox="0 0 320 150" preserveAspectRatio="none" role="img" aria-labelledby="chartTitle"></svg>
+        <ul class="chart-legend" id="chartLegend"></ul>
+      </div>
+
+      <div class="chart-moods" id="chartMoods" hidden>
+        <h3 class="chart-moods-title" id="chartMoodsTitle"></h3>
+        <ul class="mood-timeline" id="moodTimeline"></ul>
+      </div>
+
+      <p class="chart-note" id="chartNote"></p>
+    </section>
+
     <footer class="foot">
       <p id="freshnessHint"></p>
       <p class="foot-sub"><span id="timezoneNote"></span></p>
@@ -85,6 +114,7 @@
     </footer>
   </main>
 
+  <script src="/history.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -12,3 +12,6 @@ dist-prod/
 !.env.example
 # 生产部署配置（含自有域名与真实 KV id），仓库里只放模板 wrangler.jsonc
 wrangler.prod.jsonc
+# 本地临时脚本/产物（联调用的假接口、一次性资源创建脚本等）：不属于交付物。
+# 正式要留的校验脚本放 scripts/ 下，例如 scripts/d1check.py。
+.build/

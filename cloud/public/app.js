@@ -7,6 +7,9 @@
 
 const POLL_INTERVAL_MS = 60 * 1000; // 60 秒轮询一次
 const LANG_STORAGE_KEY = 'rainystatus.lang';
+/** 上一次成功读到的状态：接口挂了（含额度耗尽）时用它兜底，而不是显示「从未上报」 */
+const STATUS_CACHE_KEY = 'rainystatus.status';
+const MAX_STATUS_CACHE_BYTES = 32 * 1024;
 
 const I18N = {
   'zh-Hans': {
@@ -238,6 +241,30 @@ function setText(node, text) {
   if (node) node.textContent = text;
 }
 
+/** 页面是否已经渲染过一次真实数据（用于决定失败时要不要用缓存兜底） */
+let rendered = false;
+
+function readStatusCache() {
+  try {
+    const raw = localStorage.getItem(STATUS_CACHE_KEY);
+    if (!raw || raw.length > MAX_STATUS_CACHE_BYTES) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.schemaVersion === 1 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStatusCache(data) {
+  try {
+    const raw = JSON.stringify(data);
+    if (raw.length > MAX_STATUS_CACHE_BYTES) return;
+    localStorage.setItem(STATUS_CACHE_KEY, raw);
+  } catch {
+    // 存储被禁用或已满：不影响正常显示
+  }
+}
+
 /**
  * 头像：配了 `AVATAR_URL` 显示图片，否则显示 `AVATAR_EMOJI` 字符。
  *
@@ -305,6 +332,9 @@ function applyStaticI18n() {
   for (const btn of document.querySelectorAll('.lang-btn')) {
     btn.setAttribute('aria-pressed', btn.dataset.lang === lang ? 'true' : 'false');
   }
+
+  // 图表模块的文案也跟着一起切；它可能还没加载，用可选链兜住
+  window.RSChart?.setLang(lang);
 }
 
 function networkLabel(value) {
@@ -336,6 +366,8 @@ function render(data) {
     renderAvatar();
     applyFavicon();
     document.title = site.title;
+    // 图表能力随站点配置下发：enabled 为 false 时图表卡根本不显示
+    window.RSChart?.setSite(site);
   }
 
   const lastSeenAt = data.lastSeenAt;
@@ -458,10 +490,21 @@ async function load() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     render(data);
+    rendered = true;
+    writeStatusCache(data);
     // 成功后清掉「上次读取失败」的残留标记（否则恢复后仍显示失败）
     const refreshed = el('refreshedAt');
     refreshed.classList.remove('stale');
   } catch {
+    // 第一次就失败时，用本地缓存顶上：显示旧数据 + 明确标注「上次读取失败」，
+    // 比把「服务暂时不可用」误报成「从未上报」诚实得多。
+    if (!rendered) {
+      const cached = readStatusCache();
+      if (cached) {
+        render(cached);
+        rendered = true;
+      }
+    }
     setText(el('statusText'), t('loadFailed'));
     el('statusDot').className = 'dot gone';
     // 关键：读取失败时页面上的电量/时间都是**上一次成功的数据**，
@@ -495,3 +538,19 @@ setInterval(load, POLL_INTERVAL_MS);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) load();
 });
+
+/**
+ * 给图表模块（history.js）用的小桥。
+ *
+ * 为什么不各自复制一份格式化逻辑：时区口径只有一处才对——
+ * 「访客本地时区」这个决定要是实现成两份，迟早会漂移成两种显示。
+ */
+window.RS = {
+  t,
+  formatClock,
+  formatDuration,
+  effectiveOffsetMinutes,
+  formatOffset,
+  getSite: () => site,
+  getLang: () => lang,
+};

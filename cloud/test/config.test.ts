@@ -6,13 +6,20 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { siteConfig } from '../src/config.ts';
+import { historyConfig, siteConfig } from '../src/config.ts';
 import type { Env } from '../src/types.ts';
 
 /** siteConfig 只读 vars，KV / AUTH_TOKEN 与本次断言无关 */
 function envOf(vars: Record<string, string>): Env {
   return vars as unknown as Env;
 }
+
+/** 历史功能需要一个 D1 绑定（值本身不参与解析，只要不是 undefined） */
+function envWithDb(vars: Record<string, string>): Env {
+  return { ...vars, HISTORY_DB: {} } as unknown as Env;
+}
+
+const TURNSTILE_OK = { TURNSTILE_SECRET: 's3cret', TURNSTILE_SITE_KEY: '0xSITEKEY' };
 
 describe('siteConfig.customText', () => {
   it('未配置时为 null（前端回退到内置三语文案）', () => {
@@ -118,5 +125,72 @@ describe('siteConfig.avatarUrl', () => {
     const { avatar, avatarUrl } = siteConfig(envOf({ AVATAR_URL: '/a.png', AVATAR_EMOJI: '🐱' }));
     expect(avatar).toBe('🐱');
     expect(avatarUrl).toBe('/a.png');
+  });
+});
+
+// 历史功能是这个项目里唯一「配错了会静默失效或静默不设防」的部分，所以把它的
+// 判定规则钉死在这里：默认全关、缺密钥一律不开、没实现的档位不许宣告。
+describe('historyConfig', () => {
+  it('默认全关：什么都不配时既没有接口也不采集', () => {
+    const config = historyConfig(envOf({}));
+    expect(config.enabled).toBe(false);
+    expect(config.collect).toBe(false);
+    expect(config.ranges).toEqual([]);
+    expect(config.blocked).toBeNull();
+  });
+
+  it('开了 HISTORY_ENABLED 但没配 Turnstile：公开关闭（fail-closed），采集照旧', () => {
+    const config = historyConfig(envWithDb({ HISTORY_ENABLED: 'true', HISTORY_RANGES: '24h' }));
+    expect(config.enabled).toBe(false);
+    expect(config.blocked).toBe('turnstile_not_configured');
+    // 密钥没配好不该把数据也一起丢掉：配好后直接就能出图
+    expect(config.collect).toBe(true);
+    expect(siteConfig(envWithDb({ HISTORY_ENABLED: 'true' })).history).toMatchObject({
+      enabled: false,
+      ranges: [],
+      siteKey: null,
+      reason: 'turnstile_not_configured',
+    });
+  });
+
+  it('只配了 secret 不够：前端没有 site key 就渲染不出验证组件，一样按没配好处理', () => {
+    const config = historyConfig(envWithDb({ HISTORY_ENABLED: 'true', TURNSTILE_SECRET: 's3cret' }));
+    expect(config.enabled).toBe(false);
+    expect(config.blocked).toBe('turnstile_not_configured');
+  });
+
+  it('配全后开启，且默认要求人机验证（不是「配了才要求」）', () => {
+    const config = historyConfig(envWithDb({ HISTORY_ENABLED: 'true', HISTORY_RANGES: '24h', ...TURNSTILE_OK }));
+    expect(config.enabled).toBe(true);
+    expect(config.requireTurnstile).toBe(true);
+    expect(config.ranges).toEqual(['24h']);
+    expect(config.blocked).toBeNull();
+  });
+
+  it('显式 TURNSTILE_REQUIRED=false 才允许免验证（默认绝不悄悄放过）', () => {
+    const config = historyConfig(
+      envWithDb({ HISTORY_ENABLED: 'true', HISTORY_RANGES: '24h', TURNSTILE_REQUIRED: 'false' }),
+    );
+    expect(config.enabled).toBe(true);
+    expect(config.requireTurnstile).toBe(false);
+    expect(config.blocked).toBeNull();
+    expect(siteConfig(envWithDb({ HISTORY_ENABLED: 'true', HISTORY_RANGES: '24h' })).history.challenge).toBe('none');
+  });
+
+  it('只宣告实现里真正有的档位：7d/30d/1y 配了也被丢掉，避免前端点一个必然失败的档位', () => {
+    const config = historyConfig(envWithDb({ HISTORY_ENABLED: 'true', HISTORY_RANGES: '7d, 24h ,1y,30d', ...TURNSTILE_OK }));
+    expect(config.ranges).toEqual(['24h']);
+  });
+
+  it('只采集不公开：不开接口，但历史照记', () => {
+    const config = historyConfig(envWithDb({ HISTORY_COLLECT: 'true', ...TURNSTILE_OK }));
+    expect(config.enabled).toBe(false);
+    expect(config.collect).toBe(true);
+  });
+
+  it('没有 D1 绑定时不采集也不公开（避免「开了开关却写不进任何地方」）', () => {
+    const config = historyConfig(envOf({ HISTORY_ENABLED: 'true', HISTORY_COLLECT: 'true', ...TURNSTILE_OK }));
+    expect(config.enabled).toBe(false);
+    expect(config.collect).toBe(false);
   });
 });

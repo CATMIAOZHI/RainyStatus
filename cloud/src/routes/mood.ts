@@ -5,13 +5,15 @@
 //
 // 安全：text 由网页用 textContent 渲染，禁止 innerHTML（XSS 防线在渲染侧）
 
+import { historyConfig } from '../config';
+import { insertMoodEvent } from '../lib/db';
 import { isAuthorized } from '../lib/auth';
 import { writeCurrentMood } from '../lib/kv';
 import { jsonError, jsonOk, methodNotAllowed } from '../lib/response';
 import { readJson, validateMood } from '../lib/validate';
 import { SCHEMA_VERSION, type CurrentMood, type Env } from '../types';
 
-export async function handleMood(request: Request, env: Env): Promise<Response> {
+export async function handleMood(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== 'POST') {
     return methodNotAllowed('POST');
   }
@@ -42,6 +44,17 @@ export async function handleMood(request: Request, env: Env): Promise<Response> 
     await writeCurrentMood(env.STATUS_KV, mood);
   } catch {
     return jsonError(500, 'internal_error', 'Failed to persist mood');
+  }
+
+  // 心情事件单独存一份历史（当前值会被覆盖，覆盖后就再也回不到「昨天的我」了）。
+  // 只在内容变化时才走到这里（App 端已去重），所以这张表很稀疏。
+  if (env.HISTORY_DB && historyConfig(env).collect) {
+    const db = env.HISTORY_DB;
+    ctx.waitUntil(
+      insertMoodEvent(db, now, mood.text, mood.emoji).catch(() => {
+        // 历史失败不影响这次上报：当前心情已经写进 KV 了
+      }),
+    );
   }
 
   return jsonOk({ updatedAt: now });

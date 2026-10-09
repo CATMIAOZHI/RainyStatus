@@ -1,7 +1,8 @@
 // 站点配置解析：所有个人信息都来自 env vars，代码里不硬编码任何用户名/标题
 // 这样别人部署后看到的是自己的信息
 
-import type { Env, SiteConfig } from './types';
+import { RANGE_SPECS, type RangeKey } from './lib/history';
+import type { Env, HistoryBlockedReason, SiteConfig } from './types';
 
 const DEFAULT_OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 分钟
 const DEFAULT_NEXT_EXPECTED_MS = 10 * 60 * 1000; // 10 分钟（心跳间隔）
@@ -121,6 +122,7 @@ export function siteConfig(env: Env): SiteConfig {
       gone: custom(env.STATUS_TEXT_GONE),
       noData: custom(env.STATUS_TEXT_NO_DATA),
     },
+    history: historyCapability(env),
   };
 }
 
@@ -128,4 +130,81 @@ export function siteConfig(env: Env): SiteConfig {
 export function sanitizeLang(lang: string | undefined): string {
   const v = (lang ?? '').trim();
   return v === 'zh-Hans' || v === 'zh-Hant' || v === 'en' ? v : 'zh-Hans';
+}
+
+/** 历史接口支持的档位 = **实现里真正有的档位**（唯一来源：lib/history.ts 的 RANGE_SPECS）。
+ *  单独再写一份白名单迟早会和实现对不上：配置里宣告了 1y、接口却只认 24h，
+ *  前端就会渲染一个必然报错的档位。 */
+const KNOWN_RANGES = new Set<string>(Object.keys(RANGE_SPECS));
+
+/**
+ * 历史能力解析。
+ *
+ * 默认**全关**：模板不配置就没有历史接口，也不会有人因为「忘了关」而公开自己的作息。
+ * 要开就同时配 `HISTORY_ENABLED=true`，档位由 `HISTORY_RANGES` 决定。
+ *
+ * 人机验证**默认就是必须的**（`TURNSTILE_REQUIRED` 默认 true）：公开的图表接口
+ * 只要能被脚本反复拉，就能把 Worker 10 万请求/天打光——这不是「可选加固」，
+ * 而是这个接口能存在的前提。确实想关（比如只在内网用）再显式写 `false`。
+ *
+ * 缺密钥时**公开关闭**（fail-closed），但采集照旧：把「没配好」变成「悄悄不验证」
+ * 是最坏的一种失败方式，会让人以为已经受保护了。
+ */
+export function historyConfig(env: Env): {
+  enabled: boolean;
+  collect: boolean;
+  ranges: RangeKey[];
+  requireTurnstile: boolean;
+  secret: string | null;
+  siteKey: string | null;
+  /** 非 null = 被配置挡住没开（前端会显示原因，而不是静默消失） */
+  blocked: HistoryBlockedReason | null;
+} {
+  const publishWanted = bool(env.HISTORY_ENABLED, false) && env.HISTORY_DB !== undefined;
+  // 采集与公开是两个开关：可以只记不晒（先攒数据、等想公开时再开），
+  // 也可以只晒不记（停止记录但保留已有历史）。默认跟随 enabled，配置最少。
+  const collect = bool(env.HISTORY_COLLECT, publishWanted) && env.HISTORY_DB !== undefined;
+  const secret = env.TURNSTILE_SECRET !== undefined && env.TURNSTILE_SECRET.trim() !== '' ? env.TURNSTILE_SECRET.trim() : null;
+  const siteKey =
+    env.TURNSTILE_SITE_KEY !== undefined && env.TURNSTILE_SITE_KEY.trim() !== '' ? env.TURNSTILE_SITE_KEY.trim() : null;
+  const wantsTurnstile = bool(env.TURNSTILE_REQUIRED, true);
+
+  // 两样缺一不可：secret 用于服务端校验，siteKey 用于浏览器出令牌。
+  // 只配了 secret 的话前端根本渲染不出验证组件，请求必然 403——等于开了个永远失败的开关。
+  const canVerify = secret !== null && siteKey !== null;
+  const blocked: HistoryBlockedReason | null = publishWanted && wantsTurnstile && !canVerify
+    ? 'turnstile_not_configured'
+    : null;
+
+  const enabled = publishWanted && blocked === null;
+  const requested = (env.HISTORY_RANGES ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item): item is RangeKey => KNOWN_RANGES.has(item));
+
+  return {
+    enabled,
+    collect,
+    // 去重并保持稳定顺序，便于前端一次性渲染
+    ranges: [...new Set(requested)],
+    requireTurnstile: enabled && wantsTurnstile,
+    secret,
+    siteKey,
+    blocked,
+  };
+}
+
+/** 下发给前端的部分（不含密钥） */
+function historyCapability(env: Env): SiteConfig['history'] {
+  const config = historyConfig(env);
+  // 一个档位都没配 = 图表卡无处可点，按未启用处理
+  const enabled = config.enabled && config.ranges.length > 0;
+  return {
+    enabled,
+    // 没启用就不宣告档位：宣告了也只是给前端一个必然失败的选项
+    ranges: enabled ? config.ranges : [],
+    challenge: enabled && config.requireTurnstile ? 'turnstile' : 'none',
+    siteKey: enabled && config.requireTurnstile ? config.siteKey : null,
+    reason: config.blocked,
+  };
 }

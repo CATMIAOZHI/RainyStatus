@@ -69,6 +69,27 @@
     "enabled": true
   }
 
+  // ── 历史图表（可选，默认全关）──
+  // 想开启：先建库并执行迁移，再把下面的绑定与 cron 打开。
+  //   npx wrangler d1 create rainystatus-history
+  //   npx wrangler d1 execute rainystatus-history --remote --file=./migrations/0001_history.sql
+  // 然后把 vars 里的 HISTORY_ENABLED 设为 "true"、HISTORY_RANGES 设为 "24h"。
+  // 注意：D1 绑定**不写进模板**，因为写占位 id 会让 wrangler 跳过自动创建；
+  // 而目前只有 KV 验证过「无 id 自动 provision」这条路。
+  //
+  // "d1_databases": [
+  //   { "binding": "HISTORY_DB", "database_name": "rainystatus-history", "database_id": "<你的 id>" }
+  // ],
+  //
+  // 图表接口需要人机验证时才配置 Turnstile（免费）：
+  //   npx wrangler secret put TURNSTILE_SECRET
+  // 并在 vars 里填 TURNSTILE_SITE_KEY。配了密钥就会强制校验。
+  //
+  // 定时任务只负责「预生成导出 + 清理过期数据」，聚合跟着心跳走，不在这里。
+  // "triggers": {
+  //   "crons": ["*/15 * * * *"]
+  // }
+
   // ── 绑定自有域名（可选）──
   // 前提：该域名所在 zone 在本账号且 active，且该主机名没有已存在的 CNAME。
   // Cloudflare 会自动创建 DNS 记录并签发证书（可能等 1–2 分钟）。

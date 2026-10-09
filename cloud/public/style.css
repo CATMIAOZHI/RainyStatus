@@ -23,6 +23,13 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 属性必须真的隐藏。
+   浏览器默认的 `[hidden] { display: none }` 来自 UA 样式表，优先级最低：
+   本表里任何一条 `display: flex / inline-flex` 都会把它盖掉（例如 `.chart-load`），
+   于是「设了 hidden 却照样显示」——最糟的结果是给访客一个点了必然失败的按钮。
+   这里用 !important 一次性收口，别在每个组件上再记一遍。 */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -355,6 +362,147 @@ h1 {
    （字号、头像、圆点、间距…）全被后面的基础规则盖掉——卡片确实变宽了、
    也确实分成两列，但里面全是手机尺寸，看起来「框大了、字还是小的」。
    ═══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   图表卡（v1.2.0）
+   默认只显示一个「加载图表」按钮；点它、过了人机验证才画图。
+   原因见 history.js 顶部注释：图表接口是公开的，自动加载会被脚本刷爆 Worker 额度。
+   ═══════════════════════════════════════════════════════ */
+.chart {
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 133, 162, 0.08);
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-head .section-title { margin: 0; }
+
+.chart-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 133, 162, 0.45);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--pink-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chart-load:hover { background: rgba(255, 133, 162, 0.14); }
+.chart-load.busy { opacity: 0.65; cursor: progress; }
+.chart-load .icon { width: 16px; height: 16px; flex: 0 0 auto; }
+
+.chart-hint,
+.chart-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.chart-challenge { margin-top: 10px; }
+
+.chart-body { margin-top: 10px; }
+
+.chart-summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+
+/* 图表配色跟着主题变量走，暗色下不会出现「粉线压深底」看不清的情况 */
+.chart-grid { stroke: rgba(255, 133, 162, 0.22); stroke-width: 1; }
+.chart-axis { fill: var(--text-dim); font-size: 9px; }
+.chart-band { fill: rgba(52, 199, 89, 0.16); }
+.chart-area { fill: rgba(255, 133, 162, 0.16); }
+.chart-line { fill: none; stroke: var(--pink-strong); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--pink-strong); stroke: #fff; stroke-width: 1.5; }
+.chart-value { fill: var(--text); font-size: 10px; font-weight: 700; }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.chart-legend li::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: rgba(255, 133, 162, 0.5);
+  vertical-align: middle;
+}
+
+.chart-moods { margin-top: 14px; }
+
+.chart-moods-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+
+.mood-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.mood-timeline li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.mood-timeline-time {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mood-timeline-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 720px) {
+  .chart { margin-top: 0; padding: 18px; }
+  .chart-svg { height: 180px; }
+  .chart-summary { font-size: 14px; }
+  .mood-timeline li { font-size: 14px; }
+}
+
 @media (min-width: 720px) {
   .card { max-width: 880px; padding: 32px 36px; }
 

@@ -8,6 +8,18 @@ export interface Env {
   /** 心跳鉴权 token（wrangler secret put AUTH_TOKEN），绝不放 vars */
   AUTH_TOKEN: string;
 
+  /**
+   * 历史数据的 D1 数据库。**可选**：没绑定时历史功能整体关闭，
+   * 当前状态与心跳照常工作（模板默认不带 D1，见 docs/design.md）。
+   */
+  HISTORY_DB?: D1Database;
+
+  /**
+   * Turnstile 密钥（wrangler secret put TURNSTILE_SECRET）。
+   * 配了就要求图表接口先过人机验证；没配则按 HISTORY_REQUIRE_TURNSTILE 决定。
+   */
+  TURNSTILE_SECRET?: string;
+
   /** 静态资源绑定（wrangler.jsonc 的 assets.binding） */
   ASSETS?: Fetcher;
 
@@ -29,6 +41,18 @@ export interface Env {
   STATUS_TEXT_OFFLINE?: string;
   STATUS_TEXT_GONE?: string;
   STATUS_TEXT_NO_DATA?: string;
+
+  /** ── 历史与图表（可选，默认关闭）── */
+  /** `true` 才对外提供 `/api/history`。默认 false：不配置就不暴露历史 */
+  HISTORY_ENABLED?: string;
+  /** `false` 可停止采集但保留已有历史；默认跟随 HISTORY_ENABLED */
+  HISTORY_COLLECT?: string;
+  /** 对外开放的档位，逗号分隔；目前只支持 `24h` */
+  HISTORY_RANGES?: string;
+  /** Turnstile 的 site key（公开值，会下发给前端渲染验证组件） */
+  TURNSTILE_SITE_KEY?: string;
+  /** 要求人机验证；未设置时按「配了 TURNSTILE_SECRET 就要求」处理 */
+  TURNSTILE_REQUIRED?: string;
 }
 
 /** KV: device_status */
@@ -94,7 +118,35 @@ export interface SiteConfig {
    * 自己写的一句话，机器翻译只会更差。因此自定义了就固定用它，三语切换对它不生效。
    */
   customText: StatusCustomText;
+  /** 历史图表能力：前端据此决定显示「加载图表」按钮还是直接隐藏 */
+  history: HistoryCapability;
 }
+
+/**
+ * 历史能力描述（随 /api/status 下发）。
+ *
+ * `enabled` 为 false 时前端**不应**渲染图表卡：与其让访客点一个永远失败的按钮，
+ * 不如一开始就不显示。
+ */
+export interface HistoryCapability {
+  enabled: boolean;
+  ranges: string[];
+  /** `turnstile` = 需要人机验证；`none` = 只靠手动点击（较弱） */
+  challenge: 'turnstile' | 'none';
+  /** 公开的 site key；没有验证时为 null */
+  siteKey: string | null;
+  /**
+   * 非 null = 因为**配置不完整**所以没开（例如要求人机验证但缺密钥）。
+   *
+   * 为什么要下发这个原因：配置不全时如果只是把图表卡藏起来，部署者只会看到
+   * 「什么都没有」，既不知道哪里配错了、也不知道该去看文档。前端会把这句话
+   * 直白地显示出来。
+   */
+  reason: HistoryBlockedReason | null;
+}
+
+/** 历史功能被配置挡住的原因（可枚举，前端按它选文案） */
+export type HistoryBlockedReason = 'turnstile_not_configured';
 
 /** 自定义状态文案。null = 未配置，前端回退到内置三语文案 */
 export interface StatusCustomText {

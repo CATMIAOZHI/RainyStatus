@@ -98,7 +98,7 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
                             └───────────────────────────┘
 ```
 
-- **无数据库、无服务器**，只有 1 个 Worker + 1 个 KV namespace + 1 个静态资源目录。
+- **默认无数据库**：只有 1 个 Worker + 1 个 KV namespace + 1 个静态资源目录。历史图表是可选的，开了才多一个 D1（见「云端 · 历史图表」）。
 - 网页做成**静态资源**（Cloudflare 官方：*Requests to static assets are free and unlimited*）→ 网页访问不吃任何额度；即使免费额度耗尽（错误码 `1027`），**网页照常打开、只有 API 报错**。
 - 详细设计见 [`docs/design.md`](docs/design.md)，接口契约见 [`docs/api.md`](docs/api.md)。
 
@@ -138,6 +138,31 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 | `STATUS_TEXT_OFFLINE` | 空 | 同上，最近一次心跳超过掉线阈值时 |
 | `STATUS_TEXT_GONE` | 空 | 同上，长时间没有任何上报时 |
 | `STATUS_TEXT_NO_DATA` | 空 | 同上，从未收到过心跳时 |
+
+**展示开关是服务端过滤，不是"藏起来"**：`SHOW_TEMPERATURE` / `SHOW_NETWORK` 关掉后，`/api/status` 返回的对应字段本身就是 `null`；`SHOW_MOOD` 关掉后 `mood` 整体为 `null`。直接 `curl` 也拿不到。
+
+### 云端 · 历史图表（可选，**默认全关**）
+
+不配置就**完全没有**历史接口，也不会记录任何历史——别人部署时不会不小心公开自己的作息。
+
+要开就三步（详细见 `cloud/wrangler.jsonc` 末尾注释）：
+
+1. `npx wrangler d1 create rainystatus-history`，把输出的 `database_id` 填进 `d1_databases`（binding 必须是 `HISTORY_DB`）；
+2. `npx wrangler d1 execute rainystatus-history --remote --file=./migrations/0001_history.sql`；
+3. 打开 `triggers.crons`（`*/15 * * * *`），并把下面这些 vars 配上。
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `HISTORY_ENABLED` | `false` | 是否对外提供 `/api/history`（公开开关） |
+| `HISTORY_COLLECT` | 跟随 `HISTORY_ENABLED` | 是否记录历史。可以「只记不晒」（先攒数据）或「只晒不记」（停止记录但保留已有历史） |
+| `HISTORY_RANGES` | 空 | 公开哪些档位，逗号分隔。目前只实现 `24h`；**没写进来的档位一律 404** |
+| `TURNSTILE_SITE_KEY` | 空 | Turnstile 的 site key（公开值，会下发给前端渲染验证组件） |
+| `TURNSTILE_REQUIRED` | `true` | 是否强制人机验证。**默认就是必须**；确实想免验证（比如只在内网用）要显式写 `false` |
+| `TURNSTILE_SECRET` | — | **密钥**，用 `npx wrangler secret put TURNSTILE_SECRET` 写入，**绝不要写进 `vars` 或提交** |
+
+> **fail-closed**：要求验证（默认）却没配密钥时，`/api/history` **整体关闭**（而不是退化成「不验证」）——否则会让人以为已经受保护了。此时页面会直说原因，采集也照常进行；补齐密钥并重新部署后，下一个 Cron 周期（≤15 分钟）就能出图。
+
+数据分层与保留期：原始 10 分钟点 **7 天** / 小时汇总 **35 天** / 日汇总 **5 年**（约 1830 行、几 MB），见 `DEFAULT_RETENTION`。稳态总行数约 3700 行。
 
 > 这些值在 Deploy to Cloudflare 的配置页里也能直接改。
 

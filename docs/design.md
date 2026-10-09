@@ -1,7 +1,7 @@
 # 雨晴Status · 设计方案
 
 > 状态：**方案已定稿，工程已落地，云端已上线**（App + Worker + 静态页均已实现；2026-10-06 已部署到 `https://status.WaterRainCat.com`，自有域名 + KV 均已绑定）
-> 最后更新：2026-10-07
+> 最后更新：2026-10-10
 
 ---
 
@@ -31,9 +31,10 @@ Redmi K80 Pro                      Cloudflare                       访客
                                 └──────────────────┘
 ```
 
-- 云端只用了 **1 个 Worker + 1 个 KV namespace + 1 个静态资源目录**，无数据库、无服务器。
+- 默认**无数据库**：**1 个 Worker + 1 个 KV namespace + 1 个静态资源目录**。
 - 公开网页做成 **静态资源**（Cloudflare 官方：*Requests to static assets are free and unlimited*）→ 网页浏览量不吃任何额度；即使免费额度耗尽（错误码 `1027`），**网页照常打开、只有 API 报错**。
-- v1 **不引入 D1**；电量曲线 / 心情时间线留到 v2。
+- v1.2 起：**网页云端图表 + 心情历史已实现，但默认全关**——D1 分层聚合、Cron 只预生成导出、公开接口只读 1 行预生成 JSON、可选 Turnstile 人机验证。契约见 `docs/api.md` 的 `GET /api/history`；抗打边界、额度账与 10 条踩坑见 `docs/roadmap.md`。
+- **App 本地图表（独立 DataStore + Canvas 手绘）待做**，见 `docs/roadmap.md`。
 
 ---
 

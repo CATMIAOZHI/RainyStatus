@@ -137,14 +137,14 @@ class StatusRepository(
         // 本地历史先落一条，再走门控：曲线的意义就是「没上报的那些时刻也在」，
         // 若放在门控之后，被挡下的那一轮（大多数轮次）就什么都不记，曲线会变成
         // 只有「电量涨了 3%」那些点的稀疏折线。
-        // 只在本机写 DataStore，不产生任何网络请求／KV 写，因此不必计入写预算。
+        // 只在本机写一份记录（Room 里一条 INSERT），不产生任何网络请求／KV 写，因此不必计入写预算。
+        // 值跟上一条一样且不到 9 分钟时 `record()` 自己会跳过。
         if (settings.historyEnabled) {
             // 本地历史**绝不能连累心跳**：磁盘写失败（空间不足、存储损坏）时
             // 只丢一个画图的点，该发的那条心跳照样发。
             runCatching {
                 historyStore.record(
-                    sample = BatterySample(t = now, b = snapshot.batteryPercent, c = snapshot.charging),
-                    now = now,
+                    BatterySample(t = now, b = snapshot.batteryPercent, c = snapshot.charging)
                 )
             }.onFailure { DebugLog.w(TAG, "History sample dropped: ${it.message}") }
         }

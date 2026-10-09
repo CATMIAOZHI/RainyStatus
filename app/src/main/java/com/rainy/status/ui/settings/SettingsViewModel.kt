@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rainy.status.R
 import com.rainy.status.data.local.AppSettings
+import com.rainy.status.data.local.HistoryStore
 import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.repository.ConnectionTestResult
 import com.rainy.status.data.repository.ReportOutcome
@@ -55,6 +56,8 @@ data class SettingsUiState(
     /** 语言偏好：null = 跟随系统 */
     val localeCode: String? = null,
     val keepAlive: KeepAliveUi = KeepAliveUi(),
+    /** 本机电量历史已记录的条数（永久保留，只有手动清空才会归零） */
+    val historyCount: Int = 0,
 )
 
 /** 设置页里的保活区块状态 */
@@ -79,6 +82,7 @@ data class KeepAliveUi(
 class SettingsViewModel @Inject constructor(
     private val repository: StatusRepository,
     private val settingsStore: SettingsStore,
+    private val historyStore: HistoryStore,
     @ApplicationContext private val appContext: Context,
     /**
      * 应用级作用域：给「失焦即落盘」用。
@@ -151,6 +155,10 @@ class SettingsViewModel @Inject constructor(
             }
         }
         _uiState.update { it.copy(localeCode = LocaleManager.getLocaleCode(appContext)) }
+        // 条数走 Flow：清空之后立刻变 0，不需要手动刷新
+        viewModelScope.launch {
+            historyStore.sampleCount.collect { count -> _uiState.update { it.copy(historyCount = count) } }
+        }
         refreshKeepAlive()
     }
 
@@ -328,6 +336,19 @@ class SettingsViewModel @Inject constructor(
      * 顺手清空历史会让人以为「关掉＝数据没了」。要清空是另一件事，见 `docs/roadmap.md`。
      */
     fun setHistoryEnabled(value: Boolean) = viewModelScope.launch { settingsStore.setHistoryEnabled(value) }
+
+    /**
+     * 清空本机历史（不可恢复）。
+     *
+     * 本机历史是**永久保留**的（没有自动清理），所以「清空」是这个 App 里唯一会删数据的入口：
+     * 调用点必须带二次确认弹窗，别顺手接到别的按钮上。云端的历史不受影响。
+     */
+    fun clearHistory() {
+        viewModelScope.launch {
+            historyStore.clear()
+            _uiState.update { it.copy(message = UiText.Resource(R.string.settings_history_cleared)) }
+        }
+    }
 
     // ── 外观 / 语言 ──
 

@@ -1,8 +1,11 @@
 package com.rainy.status.di
 
 import android.content.Context
+import androidx.room.Room
 import com.rainy.status.BuildConfig
 import com.rainy.status.data.device.DeviceStateReader
+import com.rainy.status.data.local.BatterySampleDao
+import com.rainy.status.data.local.HistoryDatabase
 import com.rainy.status.data.local.HistoryStore
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
@@ -102,8 +105,24 @@ object AppModule {
     @Provides
     @Singleton
     fun provideHistoryStore(
-        @Named(DataStoreQualifiers.HISTORY) dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>
-    ): HistoryStore = HistoryStore(dataStore)
+        dao: BatterySampleDao,
+        @Named(DataStoreQualifiers.HISTORY) dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+        @ApplicationContext context: Context,
+    ): HistoryStore = HistoryStore(dao, dataStore, context)
+
+    @Provides
+    @Singleton
+    fun provideHistoryDatabase(
+        @ApplicationContext context: Context
+    ): HistoryDatabase = Room.databaseBuilder(
+        context.applicationContext,
+        HistoryDatabase::class.java,
+        HistoryDatabase.NAME,
+    ).build()
+
+    @Provides
+    @Singleton
+    fun provideBatterySampleDao(database: HistoryDatabase): BatterySampleDao = database.samples()
 
     @Provides
     @Singleton

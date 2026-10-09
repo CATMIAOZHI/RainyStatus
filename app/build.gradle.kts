@@ -133,6 +133,11 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+    // Room：本机电量历史。永久保留 ⇒ 不能再把整段历史压成一个 JSON blob 每次重写，
+    // 改成一张表 + 按时间窗口查询（参照 RainyToken 的用法）
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 
     // DI (Hilt + KSP)
     implementation(libs.hilt.android)

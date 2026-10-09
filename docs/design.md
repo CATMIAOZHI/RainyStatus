@@ -273,7 +273,9 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | Compose BOM / DataStore | 2024.10.01 / 1.1.1 |
 | 网络 | OkHttp 4.12.0 + kotlinx-serialization 1.7.3（只有一个上报 + 一个心情端点，**不上 Retrofit**） |
 
-**v1 明确不需要**：Room（离线队列压成「最多一条待发」用 DataStore 足够，省 KSP 编译开销与迁移成本）、WebKit、Firebase/FCM。
+> **v1 明确不需要**：WebKit、Firebase/FCM。
+
+> **Room 是例外（2026-10 起启用）**：本机电量历史一开始是 DataStore 里的一个 JSON blob（7 天 / 2048 点上限），因为「保留期永久」把上限这条路堵死了——10 分钟一条一年就 5 万条，再整段重写不可接受。于是照 RainyToken 换成 Room 2.7.1 + KSP（一张 `battery_samples` 表，写一条是一次 INSERT），顺带为 T3 本机心情历史留了位置。**离线队列仍然用 DataStore**（压成「最多一条待发」，不值得上 Room）。
 
 **必须复刻 RainyToken 的两段 ARM64 proot workaround**（`aapt2` 强制 `linux-aarch64` + `guardReleaseResources`），否则 Release APK 会静默缺资源。
 

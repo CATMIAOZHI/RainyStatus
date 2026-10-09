@@ -1,8 +1,8 @@
 package com.rainy.status.domain.history
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -15,7 +15,7 @@ import java.time.ZoneId
  * 重点覆盖三类最容易写错的地方：
  * 1. **窗口口径**（闭区间、按本地日切）；
  * 2. **充电次数**（未知状态怎么算、跨窗口/跨日不能重复计）；
- * 3. **裁剪与抽稀**（7 天保留、上限抽稀后最新点必须原样保留）。
+ * 3. **该不该记**（值没变且间隔太短的重复点要跳掉；历史本身永久保留，不做裁剪）。
  */
 class BatteryHistoryTest {
 
@@ -30,66 +30,52 @@ class BatteryHistoryTest {
 
     private fun sample(t: Long, b: Int? = 50, c: Boolean? = false) = BatterySample(t = t, b = b, c = c)
 
-    // ── 追加与去重 ──
+    // ── 该不该记（去重） ──
 
     @Test
-    fun `append keeps the same instance when the value is unchanged and the gap is short`() {
-        val existing = listOf(sample(now - 60_000, b = 50, c = false))
-        val next = BatteryHistory.append(
-            existing,
-            sample(now, b = 50, c = false),
-            now = now
-        )
-        // 契约：无变化必须原样返回传入的实例，调用方靠它跳过写盘
-        assertSame(existing, next)
+    fun `shouldRecord accepts the first sample of an empty database`() {
+        assertTrue(BatteryHistory.shouldRecord(null, sample(now)))
     }
 
     @Test
-    fun `append records when the gap exceeds the dedupe window`() {
-        val existing = listOf(sample(now - BatteryHistory.SAME_VALUE_MIN_GAP_MS - 1, 50, false))
-        val next = BatteryHistory.append(existing, sample(now, 50, false), now = now)
-        assertEquals(2, next.size)
+    fun `shouldRecord skips an unchanged value inside the dedupe window`() {
+        val last = sample(now - 60_000, b = 50, c = false)
+        assertFalse(BatteryHistory.shouldRecord(last, sample(now, b = 50, c = false)))
     }
 
     @Test
-    fun `append records when only the charging state changed`() {
-        val existing = listOf(sample(now - 60_000, b = 50, c = false))
-        val next = BatteryHistory.append(existing, sample(now, b = 50, c = true), now = now)
-        assertEquals(2, next.size)
-        assertEquals(true, next.last().c)
-    }
-
-    // ── 裁剪与抽稀 ──
-
-    @Test
-    fun `prune drops samples older than the retention window`() {
-        val old = now - BatteryHistory.RETENTION_MS - 1
-        val kept = BatteryHistory.prune(listOf(sample(old), sample(now - 1000)), now)
-        assertEquals(1, kept.size)
-        assertEquals(now - 1000, kept.first().t)
+    fun `shouldRecord records an unchanged value once the gap reaches the dedupe window`() {
+        val last = sample(now - BatteryHistory.SAME_VALUE_MIN_GAP_MS, b = 50, c = false)
+        assertTrue(BatteryHistory.shouldRecord(last, sample(now, b = 50, c = false)))
     }
 
     @Test
-    fun `prune thins older samples but keeps the newest ones intact`() {
-        val count = BatteryHistory.MAX_SAMPLES + 952
-        val input = (0 until count).map { index -> sample(now - (count - index) * 60_000L, b = index % 100) }
-
-        val pruned = BatteryHistory.prune(input, now)
-
-        assertTrue("抽稀后必须收敛到上限以内，实际 ${pruned.size}", pruned.size <= BatteryHistory.MAX_SAMPLES)
-        // 最新的一半按原样保留：最近的曲线精度不能被抽稀毁掉
-        val keepRecent = BatteryHistory.MAX_SAMPLES / 2
-        assertEquals(input.takeLast(keepRecent), pruned.takeLast(keepRecent))
-        // 抽稀不能让最新的那条消失
-        assertEquals(input.last(), pruned.last())
-        // 也不能把顺序弄乱（升序是折线绘制的前提）
-        assertEquals(pruned.sortedBy { it.t }, pruned)
+    fun `shouldRecord records when only the charging state changed`() {
+        val last = sample(now - 60_000, b = 50, c = false)
+        assertTrue(BatteryHistory.shouldRecord(last, sample(now, b = 50, c = true)))
     }
 
     @Test
-    fun `prune sorts out of order input`() {
-        val pruned = BatteryHistory.prune(listOf(sample(now), sample(now - 120 * 60_000)), now)
-        assertEquals(listOf(now - 120 * 60_000, now), pruned.map { it.t })
+    fun `shouldRecord records when only the battery level changed`() {
+        val last = sample(now - 60_000, b = 50, c = false)
+        assertTrue(BatteryHistory.shouldRecord(last, sample(now, b = 51, c = false)))
+    }
+
+    @Test
+    fun `shouldRecord treats an unknown reading as a change`() {
+        // null 与具体值不是同一件事：读不到 → 读到 50% 也要记，
+        // 否则「不知道」和「真的 50%」会被压成一条直线
+        assertTrue(BatteryHistory.shouldRecord(sample(now - 60_000, b = null), sample(now, b = 50)))
+        assertTrue(BatteryHistory.shouldRecord(sample(now - 60_000, b = 50), sample(now, b = null)))
+    }
+
+    // ── 加载窗口 ──
+
+    @Test
+    fun `load window covers a full week plus lead-in and slack`() {
+        // 7 个本地日 + 1 天前置（给 chargingStateBefore 看窗口外那条）+ 1 天余量 = 9 天
+        assertEquals(9L * 24 * 60 * 60 * 1000, BatteryHistory.LOAD_WINDOW_MS)
+        assertTrue(BatteryHistory.LOAD_WINDOW_MS > BatteryHistory.H24_MS * BatteryHistory.DAYS_IN_WEEK)
     }
 
     // ── 窗口 ──

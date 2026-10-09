@@ -20,6 +20,8 @@ kotlinxSerializationJson = "1.7.3"
 
 # DataStore
 datastorePreferences = "1.1.1"
+# Room（本机电量历史）：与 RainyToken 同一版本组合，已在那边的 AGP 9 / KSP 2.3.9 工具链上验证过
+room = "2.7.1"
 
 # DI
 hilt = "2.59.2"
@@ -59,6 +61,10 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # DataStore
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+# Room
+room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 # DI
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

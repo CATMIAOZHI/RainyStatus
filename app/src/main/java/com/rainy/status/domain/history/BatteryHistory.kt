@@ -52,25 +52,22 @@ data class DayRange(
 }
 
 /**
- * 本地电量历史的纯逻辑：**不碰 DataStore、不碰 Android API**，全部可直接单测。
+ * 本地电量历史的纯逻辑：**不碰 Room、不碰 Android API**，全部可直接单测。
  *
  * 为什么要有这一层：曲线图最容易错的不是画法，而是「窗口怎么切、缺口怎么断、
  * 充电次数怎么数」这类口径问题。把它们挤在 Compose 里就没法验证了。
+ *
+ * 保留期：**永久**（存在 Room 里，没有自动清理，只有用户手动清空），
+ * 所以这里**没有再裁剪/抽稀的代码**——数据不会因为上限被丢掉。
  */
 object BatteryHistory {
-
-    /** 保留 7 天（与网页端原始层同口径） */
-    const val RETENTION_MS = 7L * 24 * 60 * 60 * 1000
-
-    /** 点数上限：7 天按 10 分钟一点约 1008 点，2048 留出事件触发的余量 */
-    const val MAX_SAMPLES = 2048
 
     /**
      * 「值没变」时的最小记录间隔。
      *
      * 上报间隔可以选 60 秒，但电量一分钟内基本不会变；不做这个去重的话
-     * 7 天会攒到 1 万点，抽稀把曲线压得看不出形状。9 分钟取自
-     * [com.rainy.status.service.AlarmScheduler] 的 Doze 下限，与系统能保证的最密节奏一致。
+     * 历史一年能攒到 50 万条。9 分钟取自 [com.rainy.status.service.AlarmScheduler]
+     * 的 Doze 下限，与系统能保证的最密节奏一致。
      */
     const val SAME_VALUE_MIN_GAP_MS = 9L * 60 * 1000
 
@@ -84,39 +81,34 @@ object BatteryHistory {
     const val DAYS_IN_WEEK = 7
 
     /**
-     * 追加一条采样，并顺带裁剪。
+     * 每次从数据库加载的时间窗口。
      *
-     * **无变化时返回传入的那个实例本身**（而不是内容相同的新列表）：
-     * 调用方（[com.rainy.status.data.local.HistoryStore]）用它判断「这次不用写盘」。
-     * 这是本函数的契约，改动时别破坏——否则每次上报都会重写一遍整个 blob。
+     * 组成：最长的「7 个本地日」最多会往前 7.99 天，再加 **1 天前置**——
+     * 最早那天要判断「当天 00:00 之前是不是已经在充电」，得有一条窗口外的样本可看
+     * （见 [chargingStateBefore]），否则跨窗口的那一次充电会被多算一次。
+     * 最后再加 1 天余量，凑成 9 天。
+     *
+     * 注意这只影响**加载多少**，不影响画什么：图表的窗口永远是 24 小时 / 7 个本地日。
      */
-    fun append(existing: List<BatterySample>, sample: BatterySample, now: Long): List<BatterySample> {
-        val last = existing.lastOrNull()
-        val unchanged = last != null && last.b == sample.b && last.c == sample.c
-        if (unchanged && sample.t - last.t < SAME_VALUE_MIN_GAP_MS) return existing
-        return prune(existing + sample, now)
+    const val LOAD_WINDOW_MS = (DAYS_IN_WEEK + 2) * 24L * 60 * 60 * 1000L
+
+    /**
+     * 这条采样要不要记。
+     *
+     * 值与上一条**完全相同**、且距上一条不到 [SAME_VALUE_MIN_GAP_MS] 时跳过：
+     * 上报链路每 10 分钟就会采样一次，全部记下来只是把同一条直线重复写进数据库。
+     *
+     * @param last 库里最新的一条；空库传 null
+     */
+    fun shouldRecord(last: BatterySample?, next: BatterySample): Boolean {
+        if (last == null) return true
+        val unchanged = last.b == next.b && last.c == next.c
+        return !unchanged || next.t - last.t >= SAME_VALUE_MIN_GAP_MS
     }
 
     /**
-     * 按时间排序、丢弃 7 天前的样本、必要时抽稀到 [MAX_SAMPLES] 以内。
-     *
-     * 抽稀策略：**最近的一半原样保留，更早的一半隔点丢弃**。比「先算均值再写回」简单得多，
-     * 也不会造出没出现过的电量值；代价是更早的极值可能被抹掉一点精度，
-     * 但这只是画图，不是对账数据。
+     * 窗口内的样本（**闭区间**，两端都算；输入需按时间升序）
      */
-    fun prune(samples: List<BatterySample>, now: Long): List<BatterySample> {
-        val cutoff = now - RETENTION_MS
-        var list = samples.filter { it.t >= cutoff }.sortedBy { it.t }
-        while (list.size > MAX_SAMPLES) {
-            val keepRecent = MAX_SAMPLES / 2
-            val older = list.subList(0, list.size - keepRecent)
-            val recent = list.subList(list.size - keepRecent, list.size)
-            list = older.filterIndexed { index, _ -> index % 2 == 0 } + recent
-        }
-        return list
-    }
-
-    /** 窗口内的样本（**闭区间**，两端都算；输入需按时间升序） */
     fun inWindow(samples: List<BatterySample>, from: Long, to: Long): List<BatterySample> =
         samples.filter { it.t in from..to }
 

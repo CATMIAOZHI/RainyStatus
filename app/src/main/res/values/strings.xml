@@ -77,7 +77,7 @@
     <string name="home_history_legend_24h">Green bands = charging · gaps = nothing was reported</string>
     <string name="home_history_legend_7d">Bar = daily low–high battery range · number below = charge sessions that day</string>
     <string name="home_history_empty">No local history yet</string>
-    <string name="home_history_empty_hint">One point per report, kept for up to 7 days</string>
+    <string name="home_history_empty_hint">One point per report, kept until you clear it</string>
     <string name="home_history_disabled">Local history is off</string>
     <string name="home_history_disabled_hint">Kept on this phone only. It is never uploaded and costs no cloud quota.</string>
     <string name="home_history_enable">Turn on</string>
@@ -132,7 +132,12 @@
     <string name="settings_mood_hint">Shown on your status page. Only sent when you press send.</string>
 
     <string name="settings_history">Keep local battery history</string>
-    <string name="settings_history_hint">Stored on this phone only — the chart on the home screen reads it (up to 7 days).</string>
+    <string name="settings_history_hint">Stored on this phone only — the home chart reads it. Kept forever unless you clear it.</string>
+    <string name="settings_history_count">%1$d points recorded</string>
+    <string name="settings_history_clear">Clear</string>
+    <string name="settings_history_clear_confirm">Clear local history?</string>
+    <string name="settings_history_clear_body">This deletes all %1$d points stored on this phone and cannot be undone. Cloud history and the public chart are not affected.</string>
+    <string name="settings_history_cleared">Local history cleared</string>
 
     <string name="settings_keepalive_battery">Battery optimization whitelist</string>
     <string name="settings_keepalive_alarm">Exact alarms</string>

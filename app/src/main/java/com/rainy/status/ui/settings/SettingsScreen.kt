@@ -65,6 +65,7 @@ import com.rainy.status.ui.components.asString
 import com.rainy.status.ui.components.resolve
 import com.rainy.status.ui.theme.StatusGreen
 import com.rainy.status.ui.theme.StatusOrange
+import com.rainy.status.ui.theme.StatusRed
 import com.rainy.status.ui.theme.StrawberryPink
 import com.rainy.status.ui.theme.inkMuted
 import com.rainy.status.util.PermissionUtils
@@ -104,6 +105,7 @@ fun SettingsScreen(
     var showIntervalDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     /**
      * 三个文本框「是否曾经获得过焦点」。
@@ -434,6 +436,30 @@ fun SettingsScreen(
                         checked = settings.historyEnabled,
                         onCheckedChange = { viewModel.setHistoryEnabled(it) }
                     )
+                    // 本机历史是永久保留的，没有自动清理；「清空」是这个 App 里唯一会删数据的
+                    // 入口，所以把条数摆出来、并且只有真的有数据时才给按钮（避免空按）。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_history_count, state.historyCount),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = inkMuted(),
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (state.historyCount > 0) {
+                            TextButton(onClick = { showClearHistoryDialog = true }) {
+                                Text(
+                                    text = stringResource(R.string.settings_history_clear),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = StatusRed
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -612,6 +638,28 @@ fun SettingsScreen(
                 }
             },
             onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    // 全 App 唯一会删掉本机数据的入口：必须二次确认，且按钮做成红的（与「清空日志」同一范式）
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            title = { Text(stringResource(R.string.settings_history_clear_confirm)) },
+            text = { Text(stringResource(R.string.settings_history_clear_body, state.historyCount)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearHistory()
+                        showClearHistoryDialog = false
+                    }
+                ) { Text(stringResource(R.string.action_clear), color = StatusRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 }

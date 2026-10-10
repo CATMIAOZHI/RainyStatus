@@ -93,7 +93,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 | `site.customText` | 部署者自定义的状态徽章文案（`STATUS_TEXT_*`），未配置的字段为 `null`。**非 null 时前端固定用它、不跟语言切换**；描述文字已去换行、控制字符与零宽字符（BOM/ZWSP）按空格处理，并按码点截断到 40 |
 | `site.avatarUrl` | 头像图片（`AVATAR_URL`）；`null` = 用 `site.avatar` 的 emoji 字符。只接受站内路径 `/x.png`、`https://` 外链、`data:image/*;base64,…`（长度 ≤ 4096），其余一律按未配置处理；前端在图片加载失败时也会退回 emoji |
 | `site.history` | 历史图表能力（`HISTORY_*` 解析结果）。`enabled=false` 时网页隐藏图表卡；`siteKey` 只在 `challenge="turnstile"` 时下发 |
-| `site.dataBaseUrl` | 静态数据域基址（`DATA_*` 启用时下发）；`null` = 数据走 `/api/status`。前端读不到静态文件时自动回退 |
+| `site.dataBaseUrl` | 静态数据域基址（`DATA_*` 启用时下发）；`null` = 数据走 `/api/status`。读不到静态文件时按「静态数据域」一节的前端降级策略处理 |
 | `site` | 站点展示配置，由 Worker 的 `vars` 下发，前端据此渲染（不硬编码个人信息） |
 
 **展示开关是服务端过滤，不是前端隐藏**：`SHOW_TEMPERATURE` / `SHOW_NETWORK` 关闭时，`device.temperatureC` / `device.network` 在响应里就是 `null`；`SHOW_MOOD` 关闭时 `mood` 整体为 `null`。直接 `curl` 也拿不到——否则这个开关只是「看起来关了」。
@@ -116,7 +116,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 
 - **数据同源**：与 `/api/status` 由同一个函数组装（`cloud/src/lib/status-payload.ts`），字段一致（多一层恒真 `ok:true`）。`SHOW_TEMPERATURE` / `SHOW_NETWORK` / `SHOW_MOOD` 在这一层**服务端过滤**——静态文件里没有的字段，`curl` 也拿不到。
 - **启用条件**：三者缺一不可——`DATA_ENABLED=true`、绑定了 `DATA_BUCKET`（R2）、`DATA_BASE_URL` 是合法 https 地址。任一缺失按「未启用」处理：`site.dataBaseUrl` 下发 `null`，前端照旧走 `/api/status`。
-- **前端行为**：优先读 `{dataBaseUrl}/status.json`，失败（含被熔断）**静默回退** `/api/status`；HTML 里的 `<meta name="rainystatus-data-base" content="https://data.…">` 优先级更高（两种配法任选其一）。
+- **前端行为**：优先读 `{dataBaseUrl}/status.json`。读不到时**降级**：有上次数据就显示上次数据并标记「降级」，**不立刻回退打 Worker**（否则一次静态域故障会被放大成所有打开页面 60 秒一次的 Worker 轮询）；只有完全没有数据、或数据已超过 30 分钟未更新时才回退一次，且同一标签页 10 分钟内至多一次（长期不可用也不会冻结在旧数据）。HTML 里的 `<meta name="rainystatus-data-base" content="https://data.…">` 与接口下发等价（两种配法任选其一）。
 - **发布**：心跳成功后刷新一份，Cron 每轮兜底（负责把「已掉线」翻转过去）。KV 读失败**跳过本轮、绝不覆盖上一版**——宁可数据旧，也不能把故障写成空数据永久留在桶里。
 - **时效**：对象头带 `public, max-age=60`，但**生效 TTL 以部署侧 Cache Rule 为准**（建议：整域 Eligible for cache + Edge TTL 忽略源站 60s + 浏览器 TTL 60s），否则会被站点默认 Browser Cache TTL 放大成几小时。
 - **熔断**（R2 官方没有「用完停」）：`GUARD_*` 巡检读 R2 用量，超阈值（默认月 600 万 / 小时 200 万次）自动**停用自定义域 + 关闭 r2.dev**，只允许人工复位。

@@ -171,7 +171,7 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 
 ### 云端 · 静态数据域（可选，**默认关闭**）
 
-给人多 / 被打的场景：把状态数据写成 R2 上的 `status.json`，挂在独立域（如 `data.example.com`）上由 CDN 直出，**读取完全不经过 Worker**（静态文件读取免费不限量；Worker 免费只有 10 万请求/天）。网页优先读它、读不到自动回退 `/api/status`。
+给人多 / 被打的场景：把状态数据写成 R2 上的 `status.json`，挂在独立域（如 `data.example.com`）上由 CDN 直出，**读取完全不经过 Worker**（静态文件读取免费不限量；Worker 免费只有 10 万请求/天）。网页优先读它；读不到时显示上次数据并标记「降级」，**不立刻回退打 Worker**（否则一次静态域故障会变成全站 60 秒一次的 Worker 轮询）；只有完全没有数据、或数据已超过 30 分钟未更新时才回退一次，且同一标签页 10 分钟内至多一次——长期故障也不会把页面冻结在旧数据上。
 
 注意 R2 是计费产品（免费额度内一般够用，超额会产生账单），且官方**没有「用完停」**——所以本仓库自带超限熔断（`GUARD_*` 自动停自定义域 + 关 r2.dev，只能人工复位）。开启步骤见 `cloud/wrangler.jsonc` 里的「静态数据域」注释；攻击面、额度数字与操作清单见 [`docs/security-and-quotas.md`](docs/security-and-quotas.md)。
 

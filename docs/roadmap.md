@@ -35,7 +35,7 @@
 ### T1 · R2 抗打档（状态数据直出）【实现已就绪，默认关闭；开启需维护者授权】
 
 - 目标：让**状态读取**（人多 / 被打时）不消耗 Worker 10 万请求/天。
-- 第一期（已实现，未开启）：只把 `status.json`（即 `/api/status` 的公开载荷）发布到 **R2** + **独立自定义域**（如 `data.example.com`）+ CDN 缓存（60s）直出；前端优先读它、失败静默回退 `/api/status`。该域**不得**被任何 Worker Route 接管。
+- 第一期（已实现，未开启）：只把 `status.json`（即 `/api/status` 的公开载荷）发布到 **R2** + **独立自定义域**（如 `data.example.com`）+ CDN 缓存（60s）直出；前端优先读它，读不到时显示上次数据并标记「降级」（不立刻回退 Worker——防轮询烧额度；仅完全没有数据或数据超 30 分钟未更新时才限频回退一次）。该域**不得**被任何 Worker Route 接管。
 - 红队评审**否掉了**「4 档历史一起搬」的初版：静态文件没有运行时，`HISTORY_RANGES` 档位白名单与 Turnstile **会同时失效**——等于把「未公开档位」和「人机验证」直接绕过。历史继续留在 Worker + Turnstile。
 - 开启 = 一套缺一不可的配置：整域 Cache Rule（Eligible for cache + Edge TTL 60s + 浏览器 TTL 60s）、WAF 只放行 `status.json`（拦非 GET/HEAD 与查询串）、Smart Tiered Cache、**关闭 r2.dev**、只保留一个自定义域。
 - 熔断（R2 官方没有「用完停」）：`GUARD_*` 巡检超阈值（默认月 600 万 / 小时 200 万）→ 停自定义域 + 关 r2.dev → **只能人工复位**。

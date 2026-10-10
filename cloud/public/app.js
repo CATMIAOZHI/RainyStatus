@@ -40,6 +40,42 @@ function syncDataBase(fromApi) {
   }
 }
 
+/**
+ * 静态数据域故障时的「回退 Worker」限额。
+ *
+ * Worker 免费额度只有 10 万请求/天，而**轮询回退**会把一次静态域故障放大成
+ * 「每个打开的页面每 60 秒打一次 Worker」。所以规则是：本地数据还算新鲜
+ * （< STATUS_CACHE_STALE_MS）就绝不回退；只有完全没有数据、或数据已陈旧到
+ * 超过这个年龄时，才回退一次，且同一标签页内限频——域名长期不可用（熔断、
+ * 撤域）时页面最多停在旧数据半小时，既不会冻结，也不会恢复成轮询。
+ * 时间戳放 sessionStorage：刷新页面也认得，关掉标签页即失效
+ * （换一个标签页＝换一个访客会话；隐私模式存不下则退化成内存限频）。
+ */
+const WORKER_FALLBACK_KEY = 'rainystatus.workerFallbackAt';
+const WORKER_FALLBACK_MIN_INTERVAL_MS = 10 * 60 * 1000;
+/** 本地数据超过这个年龄就视为陈旧：允许一次限频回退（避免长期不可用时冻结在旧数据） */
+const STATUS_CACHE_STALE_MS = 30 * 60 * 1000;
+
+let lastWorkerFallbackAt = (() => {
+  try {
+    return Number(sessionStorage.getItem(WORKER_FALLBACK_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+})();
+
+function markWorkerFallback() {
+  lastWorkerFallbackAt = Date.now();
+  try {
+    sessionStorage.setItem(WORKER_FALLBACK_KEY, String(lastWorkerFallbackAt));
+  } catch {
+    // 存不下就算了：内存里的值还在
+  }
+}
+
+/** 本轮静态读取是否失败过（load() 据此显示「降级」而不是「完全读不到」） */
+let staticFetchFailed = false;
+
 const I18N = {
   'zh-Hans': {
     online: '还在冒泡',
@@ -67,6 +103,8 @@ const I18N = {
     tzFixed: '本页时间按固定时区显示（{tz}）',
     refreshedAt: '本页刷新于 {t}',
     loadFailed: '无法读取状态，请稍后重试',
+    degraded: '暂时无法刷新（显示上次数据）',
+    degradedHint: '数据源暂时不可用（已自动切换备用线路）',
     neverSeen: '从未上报',
     unknown: '未知',
     networkWifi: 'Wi-Fi',
@@ -100,6 +138,8 @@ const I18N = {
     tzFixed: '本頁時間依固定時區顯示（{tz}）',
     refreshedAt: '本頁重新整理於 {t}',
     loadFailed: '無法讀取狀態，請稍後重試',
+    degraded: '暫時無法重新整理（顯示上次資料）',
+    degradedHint: '資料源暫時無法使用（已自動切換備用線路）',
     neverSeen: '從未上報',
     unknown: '未知',
     networkWifi: 'Wi-Fi',
@@ -133,6 +173,8 @@ const I18N = {
     tzFixed: 'Times are shown in a fixed timezone ({tz})',
     refreshedAt: 'Refreshed at {t}',
     loadFailed: 'Could not load status, please retry',
+    degraded: 'Cannot refresh right now (showing last known data)',
+    degradedHint: 'Data source unavailable; switched to backup route',
     neverSeen: 'never reported',
     unknown: 'unknown',
     networkWifi: 'Wi-Fi',
@@ -519,17 +561,41 @@ function render(data) {
  * 优先走静态数据域：它是给「人多」准备的——每个访客都打一次 Worker 的话，
  * 免费额度 10 万请求/天很快见底；静态文件的读取免费不限量。
  * 那边**故意不加** `cache:'no-store'`：浏览器按响应头缓存 60 秒是对的，
- * 省下来的正是 Worker 请求。它挂了（含被熔断）就静默回退到 Worker 接口。
+ * 省下来的正是 Worker 请求。
+ *
+ * 静态域失败时**不能无条件回退 Worker**（否则轮询会把它放大成额度黑洞）：
+ *   · 本地数据还算新鲜（< STATUS_CACHE_STALE_MS）→ 不回退，抛错让 load()
+ *     显示旧数据 + 「降级」标记；
+ *   · 完全没有数据（首次访问 / 缓存被清）、或数据已陈旧 → 才回退一次，
+ *     且按 WORKER_FALLBACK_MIN_INTERVAL_MS 限频。
  */
 async function fetchStatus() {
+  staticFetchFailed = false;
   const base = dataBase();
   if (base) {
     try {
       const res = await fetch(`${base}/status.json`);
       if (res.ok) return await res.json();
     } catch {
-      // 静态域不可用：继续往下走 Worker 接口
+      // 落到下面按「降级」处理
     }
+    staticFetchFailed = true;
+    const cached = readStatusCache();
+    // 数据还算新鲜就不回退——这是防轮询放大的关键；
+    // 陈旧（或完全没有）才放行，避免域名长期不可用时页面冻结在旧数据。
+    // 年龄为负 = 设备时钟慢于服务器：小偏差忽略，明显偏差按陈旧处理（宁多试一次）。
+    const ageMs = cached === null ? NaN : Date.now() - cached.generatedAt;
+    const cacheFresh =
+      cached !== null &&
+      typeof cached.generatedAt === 'number' &&
+      ageMs < STATUS_CACHE_STALE_MS &&
+      ageMs > -5 * 60 * 1000;
+    const recentlyFellBack = Date.now() - lastWorkerFallbackAt < WORKER_FALLBACK_MIN_INTERVAL_MS;
+    if (cacheFresh || recentlyFellBack) {
+      throw new Error('static data source unavailable');
+    }
+    // 先记账再请求：连回退都失败时，也不该下一分钟再打一次 Worker
+    markWorkerFallback();
   }
   // cache: 'no-store'：刷新页面必须真的去问服务端。
   // 响应头我们已经发 no-store，但 Cloudflare 站点级的 Browser Cache TTL 会在
@@ -551,6 +617,12 @@ async function load() {
     // 成功后清掉「上次读取失败」的残留标记（否则恢复后仍显示失败）
     const refreshed = el('refreshedAt');
     refreshed.classList.remove('stale');
+    // 静态域本轮失败过（数据是回退拿到的）：把降级原因摆出来，别让降级隐身
+    if (staticFetchFailed) {
+      const hint = el('freshnessHint');
+      setText(hint, t('degradedHint'));
+      hint.classList.add('stale');
+    }
   } catch {
     // 第一次就失败时，用本地缓存顶上：显示旧数据 + 明确标注「上次读取失败」，
     // 比把「服务暂时不可用」误报成「从未上报」诚实得多。
@@ -561,12 +633,15 @@ async function load() {
         rendered = true;
       }
     }
-    setText(el('statusText'), t('loadFailed'));
+    // 有旧数据可看 + 静态域的问题：是「降级」不是「完全读不到」——分开说清楚
+    // （「完全读不到」= 连兜底数据都没有，或者根本不是静态域的问题）
+    const degraded = staticFetchFailed && rendered;
+    setText(el('statusText'), t(degraded ? 'degraded' : 'loadFailed'));
     el('statusDot').className = 'dot gone';
     // 关键：读取失败时页面上的电量/时间都是**上一次成功的数据**，
     // 若不标记，访客会把陈旧数值当成刚刚刷新的（误以为手机还活着）。
     const refreshed = el('refreshedAt');
-    setText(refreshed, t('loadFailed'));
+    setText(refreshed, t(degraded ? 'degraded' : 'loadFailed'));
     refreshed.classList.add('stale');
   }
 }

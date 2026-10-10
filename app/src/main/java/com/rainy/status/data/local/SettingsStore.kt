@@ -37,19 +37,18 @@ data class AppSettings(
     /**
      * 是否在本机记录电量历史（首页曲线图的数据源）。
      *
-     * **默认关**：与「云端采集 / 公开显示」一样，属于用户必须显式打开的一项
-     * （见 `docs/roadmap.md` 的隐私默认值）。数据只留在本机、不上传，
-     * 但既然承诺了「三个开关分开、默认全关」，默认值就不能悄悄改成开。
+     * **默认开**（2026-10 用户决定）：数据只留在本机、不上传，所以默认帮用户把曲线攒起来，
+     * 想省电/嫌私密的人在设置里关掉即可；关掉只是不再记新的，已记录的样本保留。
+     * 注意这个默认值是**在库里没有这条偏好时**才生效的：老用户如果手动关过，仍按关闭处理。
      */
-    val historyEnabled: Boolean = false,
+    val historyEnabled: Boolean = true,
     /**
      * 是否在本机留一份心情历史（首页「最近的心情」的数据源）。
      *
-     * 与 [historyEnabled] **分开**：心情比电量私密得多，不该让「想看电量曲线」的人
-     * 顺手把心情也记下来；两项写入时机也完全不同（一个跟心跳，一个只在发送成功时）。
-     * 同样默认关，同样只留在本机、不上传。
+     * 与 [historyEnabled] **分开**：两项写入时机完全不同（一个跟心跳，一个只在发送成功时），
+     * 各自开关、各自清空。同样默认开、同样只留在本机、不上传。
      */
-    val moodHistoryEnabled: Boolean = false,
+    val moodHistoryEnabled: Boolean = true,
     val themeMode: String = THEME_SYSTEM,
     /**
      * 用户**自述**已在系统里打开厂商的「自启动」开关。
@@ -105,8 +104,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             includeNetwork = prefs[KEY_INCLUDE_NETWORK] ?: false,
             deviceName = prefs[KEY_DEVICE_NAME] ?: "",
             moodEnabled = prefs[KEY_MOOD_ENABLED] ?: true,
-            historyEnabled = prefs[KEY_HISTORY_ENABLED] ?: false,
-            moodHistoryEnabled = prefs[KEY_MOOD_HISTORY_ENABLED] ?: false,
+            historyEnabled = prefs[KEY_HISTORY_ENABLED] ?: true,
+            moodHistoryEnabled = prefs[KEY_MOOD_HISTORY_ENABLED] ?: true,
             themeMode = prefs[KEY_THEME] ?: AppSettings.THEME_SYSTEM,
             autostartConfirmed = prefs[KEY_AUTOSTART_CONFIRMED] ?: false,
         )

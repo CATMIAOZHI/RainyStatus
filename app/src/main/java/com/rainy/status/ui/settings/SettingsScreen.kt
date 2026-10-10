@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,6 +93,7 @@ private data class Choice(val key: String, val label: String, val selected: Bool
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenDebugLog: () -> Unit,
+    onOpenMoodHistory: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -480,12 +483,33 @@ fun SettingsScreen(
                             .padding(top = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = stringResource(R.string.settings_mood_history_count, state.moodHistoryCount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = inkMuted(),
-                            modifier = Modifier.weight(1f)
-                        )
+                        // 「已记录 N 条」本身就是入口：点它进心情历史页。
+                        // 有记录就一定可点——首页那张卡片会随开关整块消失，
+                        // 这里是旧记录唯一的兜底出口（关掉开关之后依然有效）。
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                // 48dp 是触摸目标的下限；这行只有一行灰字，光靠文字很难点中
+                                .heightIn(min = 48.dp)
+                                .clickable(enabled = state.moodHistoryCount > 0) { onOpenMoodHistory() },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_mood_history_count, state.moodHistoryCount),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = inkMuted()
+                            )
+                            if (state.moodHistoryCount > 0) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_chevron_right),
+                                    contentDescription = null,
+                                    // 粉色（不是灰色）：这行平时只是「一个数字」，关掉开关后
+                                    // 首页那张卡会整块消失，得让人一眼看出这里还能点进去看旧记录
+                                    tint = StrawberryPink,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                         if (state.moodHistoryCount > 0) {
                             TextButton(onClick = { showClearMoodHistoryDialog = true }) {
                                 Text(

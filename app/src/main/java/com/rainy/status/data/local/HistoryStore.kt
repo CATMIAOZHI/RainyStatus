@@ -27,7 +27,7 @@ import kotlinx.coroutines.sync.withLock
  *    的上报链在写，那条链上有 Mutex 串行化，不存在两个采样并发插入的窗口。
  *
  * 隐私：全部数据只在本机（`rainystatus_history.db`），**不上传、不参与云备份**
- * （`allowBackup="false"` 与 token 同一取舍）；开关默认关，用户显式打开后才开始记录。
+ * （`allowBackup="false"` 与 token 同一取舍）；开关默认开（2026-10 起），关掉就不再记录、已有的保留。
  */
 class HistoryStore(
     private val dao: BatterySampleDao,

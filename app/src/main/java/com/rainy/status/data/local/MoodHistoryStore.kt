@@ -29,6 +29,15 @@ class MoodHistoryStore(private val dao: MoodEventDao) {
     /** 已记录条数，设置页显示用 */
     val count: Flow<Int> = dao.observeCount()
 
+    /**
+     * 全部记录（心情历史页专用）。
+     *
+     * **刻意不套 [MoodTimeline.newestFirst]**：它的默认 `limit` 是首页的 [MoodTimeline.MAX_RECENT]（= 3），
+     * 套上去整张表会静静变成 3 条。这里的顺序由 DAO 的 `ORDER BY at DESC` 给，
+     * 分天分组再交给 [MoodTimeline.groupByDay]（它会自己排一次，不依赖本方法的顺序）。
+     */
+    val all: Flow<List<MoodEvent>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
     /** 记一条；同一时刻重复写入会被 IGNORE 掉（幂等） */
     suspend fun record(event: MoodEvent) {
         dao.insert(event.toEntity())

@@ -75,6 +75,7 @@ import com.rainy.status.util.PermissionUtils
 @Composable
 fun HomeScreen(
     onOpenSettings: () -> Unit,
+    onOpenMoodHistory: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -228,9 +229,11 @@ fun HomeScreen(
             }
 
             // ── 最近的心情 ──
-            // 只在本机记录开关打开时出现；关着就整块不渲染（设置页已经有那个开关）
+            // 只在本机记录开关打开时出现；关着就整块不渲染（设置页已经有那个开关，
+            // 而且设置页那行「已记录 N 条」始终可以点进历史页，旧记录不会因此变成孤儿）。
+            // 卡片只给最近 3 条，底部的「查看全部」通向按天分组的完整历史。
             if (state.settings.moodHistoryEnabled) {
-                item { MoodRecentCard(state.moodHistory) }
+                item { MoodRecentCard(state.moodHistory, onOpenAll = onOpenMoodHistory) }
             }
 
             // ── 保活检查 ──
@@ -693,7 +696,9 @@ private fun MoodCard(
                 )
                 Button(
                     onClick = onSend,
-                    enabled = text.isNotBlank(),
+                    // 刻意**不**在空文案时置灰：云端 text 是必填的，置灰虽然拦得对，
+                    // 但用户只挑了表情时只会看到「点不动的按钮」，不知道少了什么。
+                    // 点下去由 ViewModel 弹「先写点什么吧」，顺便把这条文案用起来。
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = StrawberryPink,

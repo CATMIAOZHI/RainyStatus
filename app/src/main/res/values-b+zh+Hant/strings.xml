@@ -146,12 +146,27 @@
     <string name="settings_history_clear_body">將刪掉這台手機上的 %1$d 個取樣點，無法復原。本機心情記錄、雲端歷史與公開圖表都不受影響。</string>
     <string name="settings_history_cleared">本機記錄已清空</string>
     <string name="settings_mood_history">記錄本機心情歷史</string>
-    <string name="settings_mood_history_hint">只存在這台手機上，不會上傳；只記錄打開開關之後傳送的心情。</string>
+    <string name="settings_mood_history_hint">只存在這台手機上，不會上傳；只記錄真正傳送成功的心情，關掉就不再記新的。</string>
     <string name="settings_mood_history_count">已記錄 %1$d 條</string>
     <string name="settings_mood_history_clear">清空心情記錄</string>
     <string name="settings_mood_history_clear_confirm">清空本機心情記錄？</string>
     <string name="settings_mood_history_clear_body">將刪掉這台手機上的 %1$d 條心情，無法復原。電量歷史不受影響；狀態頁上那條心情也不會變。</string>
     <string name="settings_mood_history_cleared">本機心情記錄已清空</string>
+
+    <!-- 心情歷史頁：本機存過的全部心情，按天倒著排 -->
+    <string name="mood_history_title">心情歷史</string>
+    <string name="mood_history_open_all">檢視全部</string>
+    <string name="mood_history_empty">還沒有心情記錄</string>
+    <string name="mood_history_empty_hint">只有真正送出去的心情才會被記在這台手機上</string>
+    <string name="mood_history_recording_off">記錄已關閉，這裡只顯示之前存下的記錄</string>
+    <string name="mood_history_recording_off_empty">記錄已關閉，新的心情不會再記在這台手機上</string>
+    <string name="mood_history_total">共 %1$d 則</string>
+    <string name="mood_history_today">今天</string>
+    <string name="mood_history_yesterday">昨天</string>
+    <!-- 下面三條是 DateTimeFormatter 的 pattern，不是給人讀的文案：換語言時別順手改掉字母 -->
+    <string name="mood_history_day_format">M月d日</string>
+    <string name="mood_history_day_format_year">yyyy年M月d日</string>
+    <string name="mood_history_time_format">HH:mm</string>
 
     <string name="settings_keepalive_battery">電池最佳化白名單</string>
     <string name="settings_keepalive_alarm">精確鬧鐘</string>

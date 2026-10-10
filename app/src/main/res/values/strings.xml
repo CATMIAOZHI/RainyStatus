@@ -146,12 +146,27 @@
     <string name="settings_history_clear_body">This deletes all %1$d points stored on this phone and cannot be undone. Your local mood history, cloud history and the public chart are not affected.</string>
     <string name="settings_history_cleared">Local history cleared</string>
     <string name="settings_mood_history">Keep local mood history</string>
-    <string name="settings_mood_history_hint">Saved on this phone only and never uploaded. Only moods sent after you turn this on are recorded.</string>
+    <string name="settings_mood_history_hint">Saved on this phone only and never uploaded. Only moods that actually went out are recorded; turn this off to stop.</string>
     <string name="settings_mood_history_count">%1$d entries</string>
     <string name="settings_mood_history_clear">Clear mood history</string>
     <string name="settings_mood_history_clear_confirm">Clear local mood history?</string>
     <string name="settings_mood_history_clear_body">This deletes all %1$d mood entries stored on this phone and cannot be undone. Battery history is not affected, and the mood on your status page stays.</string>
     <string name="settings_mood_history_cleared">Local mood history cleared</string>
+
+    <!-- 心情历史页：本机存过的全部心情，按天倒着排 -->
+    <string name="mood_history_title">Mood history</string>
+    <string name="mood_history_open_all">See all</string>
+    <string name="mood_history_empty">No moods recorded yet</string>
+    <string name="mood_history_empty_hint">Only moods that actually went out are saved on this phone</string>
+    <string name="mood_history_recording_off">Recording is off — showing only what was saved before</string>
+    <string name="mood_history_recording_off_empty">Recording is off — new moods will not be saved to this phone</string>
+    <string name="mood_history_total">%1$d entries in total</string>
+    <string name="mood_history_today">Today</string>
+    <string name="mood_history_yesterday">Yesterday</string>
+    <!-- 下面三条是 DateTimeFormatter 的 pattern，不是给人读的文案：换语言时别顺手改掉字母 -->
+    <string name="mood_history_day_format">MMM d</string>
+    <string name="mood_history_day_format_year">MMM d, yyyy</string>
+    <string name="mood_history_time_format">h:mm a</string>
 
     <string name="settings_keepalive_battery">Battery optimization whitelist</string>
     <string name="settings_keepalive_alarm">Exact alarms</string>

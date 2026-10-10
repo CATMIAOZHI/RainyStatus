@@ -1,6 +1,6 @@
 # 后续规划（Roadmap）
 
-> 状态：**云端与 App 本地图表均已实现**（云端：D1 分层聚合 + 预生成导出 + Turnstile + 网页图表 + 心情历史；App：本机电量历史 DataStore + 首页 Canvas 图表，默认关）。
+> 状态：**云端与 App 本地图表均已实现**（云端：D1 分层聚合 + 预生成导出 + Turnstile + 网页图表 + 心情历史；App：本机电量历史 + 本机心情历史，首页 Canvas 图表，默认关）。
 > 本文只记「以后要做什么、为什么」，具体契约以 `docs/api.md`、`docs/design.md` 为准。
 > 记录日期：2026-10-10。
 
@@ -18,8 +18,8 @@
 | 公开档位 | 网页**第一期只开放 24h**；更长档位待隐私评估后再开 |
 | 公开接口 | 只读**预生成的导出 JSON**（一次查询 1 行），绝不现场扫描历史表 |
 | 反滥用 | 图表**默认不自动加载**，需用户**手动点击**，且需通过 **Cloudflare Turnstile 人机验证** |
-| 隐私默认值 | 本地记录 / 云端采集 / 公开显示**三个开关分开，默认全关**；开关必须**服务端生效** |
-| App 本地 | **已实现**：Room 表 `battery_samples`（**永久保留**，只有设置页「清空本机记录」会删）+ Compose Canvas 手绘，**不引图表库**。采样是上报链路的副产物（见 T5），默认关（`AppSettings.historyEnabled`） |
+| 隐私默认值 | 本地记录 / 本地心情记录 / 云端采集 / 公开显示**四个开关分开，默认全关**；开关必须**服务端生效**（本机那两个在 App 端生效） |
+| App 本地 | **已实现**：Room 两张表——`battery_samples`（电量，采样是上报链路的副产物，见 T5）与 `mood_events`（心情，只记**真发出去**的那条），**永久保留**、各自独立的清空入口 + Compose Canvas 手绘，**不引图表库**；两个开关分开、默认关（`AppSettings.historyEnabled` / `moodHistoryEnabled`） |
 | 版本 | v1.2.0，沿用现有正式签名 |
 
 顺带要修的现存问题（不单独排期，跟本期一起做）：
@@ -46,10 +46,11 @@
 - 依赖：T1 或先确认「被打时动态接口挂掉可接受」。
 - 前置：Turnstile 与手动加载的**误伤率**实测；确认不会拦掉正常访客与手机端。
 
-### T3 · 心情时间线【云端已实现，App 展示待定】
+### T3 · 心情时间线【云端与 App 本地均已实现】
 
 - 云端已落地：`history_mood` 事件表 + 导出里的 `data.mood`，`SHOW_MOOD` 关闭时服务端强制置空。
-- 仍未做：App 本地的心情历史展示（本地只存当前值）。换 Room 之后已经有地方放了（`HistoryDatabase` 加一张表 + 一次 Migration），等心情这块的交互定下来再做。
+- **App 本地已落地**（2026-10）：Room 表 `mood_events`（`at` 主键 / `text` / `emoji`）+ 首页「最近的心情」卡片（最多 3 条，排在保活卡之前）；只记**真的发成功**的那一条，草稿、被去重跳过的、发送失败的一律不记。设置 → 本机记录里的独立开关默认关，清空入口与电量历史**分开**。
+- 时刻取服务端返回的 `updatedAt`（缺失才退回本机时钟），这样能和网页 `data.mood[].at` 逐条对上，也不会因设备时钟被改而顺序错乱。两边条数**不保证一致**（响应丢了但服务端已写成功、清空后重发都会错位）。
 - 隐私敏感度高于电量：默认**不**在公开页展示更多条数，宁可少显示也不要翻旧账。
 
 ### T4 · 更长保留层（10 年？）
@@ -70,7 +71,7 @@
 
 ### T7 · 本地历史的「清空 / 导出」入口
 
-- **清空：已实现**。设置 → 本机记录里显示「已记录 N 个点」+「清空记录」，点了弹二次确认（这是全 App 唯一会删本机数据的入口，别顺手接到别的按钮上）。关掉开关只是**不再记新的**，已有历史仍在。
+- **清空：已实现，且是「两个入口」**。设置 → 本机记录里分两组：电量历史（「已记录 N 个点」+「清空记录」）与心情历史（「已记录 N 条」+「清空心情记录」），各自弹出**自己的**二次确认。这是全 App 仅有的两个会删**永久历史**的入口（调试日志页那个清的只是内存里的环形缓冲，不是持久数据），**别顺手接到别的按钮上、也别把两者合并成「清空全部」**——电量曲线没有云端副本，被「顺便清一下心情」带走就再也回不来。关掉任一开关只是**不再记新的**，已有记录仍在。
 - 仍未做：导出 CSV。
 
 ---
@@ -90,5 +91,7 @@
 11. **英文文案里不要出现撇号（`'`）**：aapt2 会报 `Invalid unicode escape sequence in string`——报错文字跟撇号毫无关系，极难猜。要么写成 `\'`，要么换个说法；本仓库统一换说法（`the day's` → `daily`）。
 12. **本地历史的值没变要去重**：上报间隔可以选 60 秒，不做去重一年会攒到 50 万条。`BatteryHistory.shouldRecord()` 在「值与上一条相同且不到 9 分钟」时返回 `false`，`HistoryStore.record()` 据此**跳过写库**。（换 Room 之前这条是 `append()` 返回同一个列表实例、靠引用判断，现在改成纯函数判断，别再退回「先拼列表再整段重写」。）
 13. **充电次数必须带上「窗口开始前的最后已知状态」**：只数窗口内的样本，跨午夜仍在充电的那次会被前后两天各算一次（云端日层用无下界的前置查询，本地用 `chargingStateBefore`，两边同口径）。本地读库因此要**多留一天前置**（`LOAD_WINDOW_MS` = 7 天 + 前置 1 天 + 余量 1 天），只影响读多少，不影响画什么。
-14. **本机历史是「永久保留」的，改表结构必须手写 `Migration`**：`HistoryDatabase` 是 `version = 1` + `exportSchema = false`，看起来很方便，但**绝不能**给 Room builder 加 `fallbackToDestructiveMigration()` —— 那等于把用户攒了很久的历史当场删掉，而这段数据没有云端副本。改表就老老实实写 `Migration(1, 2)`。
-15. **DataStore → Room 的一次性搬家别删**：换存储时留了 `migrateLegacyHistory()`（用 SharedPreferences 的 `migrated_to_room` 标记，把旧 `samples_json` 逐条 insert 并删掉旧键）。老用户升级后第一次记采样时自动跑一次；删掉这段代码等于把早期构建的历史悄悄丢掉。
+14. **本机历史是「永久保留」的，改表结构必须手写 `Migration`**：`HistoryDatabase` 是 `version = 2` + `exportSchema = false`，看起来很方便，但**绝不能**给 Room builder 加 `fallbackToDestructiveMigration()` —— 那等于把用户攒了很久的历史当场删掉，而这段数据没有云端副本。加表就老老实实写 `Migration(1, 2)`（`Migrations.kt`：只 `CREATE TABLE mood_events`，不碰 `battery_samples`）。注意 `exportSchema = false` 且没配 `room.schemaLocation`，编译期读不到 v1 schema JSON，`AutoMigration` **用不了**。
+15. **DataStore → Room 的一次性搬家别删**：换存储时留了 `migrateLegacyHistory()`（用 SharedPreferences 的 `migrated_to_room` 标记，把旧 `samples_json` 逐条 insert 并删掉旧键）。老用户升级后第一次记采样时自动跑一次；删掉这段代码等于把早期构建的历史悄悄丢掉。搬家要 `withContext(Dispatchers.IO)` + `insertAll` 批量，别在主线程逐条插 2000 行。
+16. **记本地历史必须写在「云端已经成功」之后，而且要 `runCatching` 包住**：`StatusRepository.sendMood()` 里先 `setLastMood` + `recordKvWrite`，再记 `mood_events`，失败只写一行 `DebugLog.w`。顺序反了或让异常冒泡，都会出现「UI 说发送失败、KV 其实已写成功」→ 用户重发 → 云端多一行、本机因为主键 `IGNORE` 却不记两条，两边永久错位。同理：草稿、去重跳过（`unchanged`）、发送失败三条路径**都不能**记账。
+17. **迁移失败可能被静默吞掉**：上一条那个 `runCatching` 让「上报链先碰库」时迁移失败只表现为曲线**永久停更 + 日志里一行 warning**；但若最先碰库的是首页/设置页的 Flow 订阅（`HomeViewModel` / `SettingsViewModel` 里的 `collect` 没有 try/catch），异常会冒到 `viewModelScope`，表现是**页面直接崩**。所以改表结构后必须真的做一次**旧包 → 新包**覆盖安装演练（确认老数据条数不变、图表照画、心情能记 1 条），不能只看单测绿。

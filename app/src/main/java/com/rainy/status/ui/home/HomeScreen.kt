@@ -227,6 +227,12 @@ fun HomeScreen(
                 }
             }
 
+            // ── 最近的心情 ──
+            // 只在本机记录开关打开时出现；关着就整块不渲染（设置页已经有那个开关）
+            if (state.settings.moodHistoryEnabled) {
+                item { MoodRecentCard(state.moodHistory) }
+            }
+
             // ── 保活检查 ──
             // 刻意放在最下面：这是「装好之后折腾一次」的检查项，平时不该挡在
             // 电量 / 上报 / 心情这些每天都要看的卡片前面。

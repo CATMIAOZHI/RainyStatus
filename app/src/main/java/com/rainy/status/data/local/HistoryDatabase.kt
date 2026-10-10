@@ -13,21 +13,25 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
- * 本机电量历史数据库。
+ * 本机历史数据库（电量采样 + 心情事件）。
  *
- * `version = 1` + `exportSchema = false`（与 RainyToken 的 `UsageDatabase` 一致）：
+ * `version = 2` + `exportSchema = false`（与 RainyToken 的 `UsageDatabase` 一致）：
  * 不往仓库里塞 schema JSON。代价是**改表结构时必须手写 `Migration`**——
  * 这里存的是「永久保留」的历史，丢了就真没了，所以别改成 `fallbackToDestructiveMigration()`。
+ * v1 → v2 那次（加 `mood_events` 表）见 [MIGRATION_1_2]。
  *
  * 单个实例由 Hilt 的 `@Singleton` 保证（见 `di/AppModule.kt`），不自己写 `getInstance`。
  */
 @Database(
-    entities = [BatterySampleEntity::class],
-    version = 1,
+    entities = [BatterySampleEntity::class, MoodEventEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class HistoryDatabase : RoomDatabase() {
     abstract fun samples(): BatterySampleDao
+
+    /** 本机心情历史（v2 起） */
+    abstract fun moods(): MoodEventDao
 
     companion object {
         const val NAME = "rainystatus_history.db"

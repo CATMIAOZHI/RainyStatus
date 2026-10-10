@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.rainy.status.R
 import com.rainy.status.data.local.AppSettings
 import com.rainy.status.data.local.HistoryStore
+import com.rainy.status.data.local.MoodHistoryStore
 import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.repository.ConnectionTestResult
 import com.rainy.status.data.repository.ReportOutcome
@@ -58,6 +59,8 @@ data class SettingsUiState(
     val keepAlive: KeepAliveUi = KeepAliveUi(),
     /** 本机电量历史已记录的条数（永久保留，只有手动清空才会归零） */
     val historyCount: Int = 0,
+    /** 本机心情历史已记录的条数（和电量各自独立，互不影响） */
+    val moodHistoryCount: Int = 0,
 )
 
 /** 设置页里的保活区块状态 */
@@ -83,6 +86,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: StatusRepository,
     private val settingsStore: SettingsStore,
     private val historyStore: HistoryStore,
+    private val moodHistoryStore: MoodHistoryStore,
     @ApplicationContext private val appContext: Context,
     /**
      * 应用级作用域：给「失焦即落盘」用。
@@ -158,6 +162,9 @@ class SettingsViewModel @Inject constructor(
         // 条数走 Flow：清空之后立刻变 0，不需要手动刷新
         viewModelScope.launch {
             historyStore.sampleCount.collect { count -> _uiState.update { it.copy(historyCount = count) } }
+        }
+        viewModelScope.launch {
+            moodHistoryStore.count.collect { count -> _uiState.update { it.copy(moodHistoryCount = count) } }
         }
         refreshKeepAlive()
     }
@@ -347,6 +354,27 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.clear()
             _uiState.update { it.copy(message = UiText.Resource(R.string.settings_history_cleared)) }
+        }
+    }
+
+    /**
+     * 本机心情历史开关。与电量那个**分开**：心情更私密，不该跟着「想看电量曲线」一起被记。
+     * 关掉只是不再记新的，已有记录保留。
+     */
+    fun setMoodHistoryEnabled(value: Boolean) =
+        viewModelScope.launch { settingsStore.setMoodHistoryEnabled(value) }
+
+    /**
+     * 清空本机心情历史（不可恢复）。
+     *
+     * **刻意与电量历史的清空分开**：合成一个「清空全部本机记录」的话，用户想清掉心情
+     * 就会把再也回不来的电量曲线一起删掉。调用点同样必须带二次确认弹窗。
+     * 云端那份不受影响。
+     */
+    fun clearMoodHistory() {
+        viewModelScope.launch {
+            moodHistoryStore.clear()
+            _uiState.update { it.copy(message = UiText.Resource(R.string.settings_mood_history_cleared)) }
         }
     }
 

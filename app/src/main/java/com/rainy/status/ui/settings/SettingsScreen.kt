@@ -106,6 +106,7 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showClearMoodHistoryDialog by remember { mutableStateOf(false) }
 
     /**
      * 三个文本框「是否曾经获得过焦点」。
@@ -460,6 +461,41 @@ fun SettingsScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 心情历史与电量历史**各自一个开关、各自一个清空入口**：
+                    // 合成一个「清空全部本机记录」的话，用户想清掉心情就会把再也回不来的
+                    // 电量曲线一起删掉；开关分开则是因为心情私密得多，不该被
+                    // 「想看电量曲线」顺手记下来。
+                    SwitchRow(
+                        title = stringResource(R.string.settings_mood_history),
+                        subtitle = stringResource(R.string.settings_mood_history_hint),
+                        checked = settings.moodHistoryEnabled,
+                        onCheckedChange = { viewModel.setMoodHistoryEnabled(it) }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_mood_history_count, state.moodHistoryCount),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = inkMuted(),
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (state.moodHistoryCount > 0) {
+                            TextButton(onClick = { showClearMoodHistoryDialog = true }) {
+                                Text(
+                                    text = stringResource(R.string.settings_mood_history_clear),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = StatusRed
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -641,7 +677,9 @@ fun SettingsScreen(
         )
     }
 
-    // 全 App 唯一会删掉本机数据的入口：必须二次确认，且按钮做成红的（与「清空日志」同一范式）
+    // 两个「清空」都必须二次确认，确认键都做成红的（与「清空日志」同一范式）。
+    // **刻意分成两个弹窗**：合成一个「清空全部本机记录」的话，用户想清掉心情
+    // 就会顺带删掉再也回不来的电量曲线。
     if (showClearHistoryDialog) {
         AlertDialog(
             onDismissRequest = { showClearHistoryDialog = false },
@@ -657,6 +695,27 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showClearMoodHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearMoodHistoryDialog = false },
+            title = { Text(stringResource(R.string.settings_mood_history_clear_confirm)) },
+            text = { Text(stringResource(R.string.settings_mood_history_clear_body, state.moodHistoryCount)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearMoodHistory()
+                        showClearMoodHistoryDialog = false
+                    }
+                ) { Text(stringResource(R.string.action_clear), color = StatusRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearMoodHistoryDialog = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

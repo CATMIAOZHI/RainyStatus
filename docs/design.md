@@ -34,7 +34,7 @@ Redmi K80 Pro                      Cloudflare                       访客
 - 默认**无数据库**：**1 个 Worker + 1 个 KV namespace + 1 个静态资源目录**。
 - 公开网页做成 **静态资源**（Cloudflare 官方：*Requests to static assets are free and unlimited*）→ 网页浏览量不吃任何额度；即使免费额度耗尽（错误码 `1027`），**网页照常打开、只有 API 报错**。
 - v1.2 起：**网页云端图表 + 心情历史已实现，但默认全关**——D1 分层聚合、Cron 只预生成导出、公开接口只读 1 行预生成 JSON、可选 Turnstile 人机验证。契约见 `docs/api.md` 的 `GET /api/history`；抗打边界、额度账与 10 条踩坑见 `docs/roadmap.md`。
-- **App 本地图表（独立 DataStore + Canvas 手绘）已实现**（默认关，可在设置 → 本机记录里打开）：24 小时折线与 7 天每日区间柱，见 `README.md` 的「App · 本机电量历史」。
+- **App 本地图表 + 本机心情历史已实现**（都默认关，在设置 → 本机记录里打开）：Room 表 `battery_samples` + Canvas 手绘的 24 小时折线与 7 天每日区间柱；心情另有一张 `mood_events` 表与首页「最近的心情」卡片。见 `README.md` 的「App · 本机历史」。
 
 ---
 
@@ -153,6 +153,7 @@ Redmi K80 Pro                      Cloudflare                       访客
 | 收敛面 | `workers_dev: false`，只暴露自定义域，减少 `*.workers.dev` 被扫描 |
 | CORS | 网页与 API **同源** → **完全不发 CORS 头**（尤其不写 `Access-Control-Allow-Origin: *`），顺带挡掉浏览器跨域调用；非浏览器客户端由 token 挡 |
 | 隐私边界 | 只存 电量/充电/温度/心情/时间戳/App 版本/设备名。**不采集、不持久化** IP、地理位置、SSID、IMEI。Worker 代码**禁止**把 `cf-connecting-ip` 写入 KV |
+| 本机数据 | `battery_samples` / `mood_events` **只落本机磁盘**（Room），App 从不上传、不吃云端额度；两个开关默认**关**，两个清空入口**分开**（电量曲线没有云端副本，不能被「顺便清心情」带走）。心情那条还额外要求：只在**真的发送成功**之后才记 |
 | 公开性提醒 | 心情文案与设备名是**全世界可见**的 |
 | token 泄露处置 | `wrangler secret put AUTH_TOKEN` 立刻替换 → 旧 token 即刻失效（无宽限期）；同时吊销 CF API Token |
 
@@ -217,6 +218,10 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | **心情** | 启用心情 | 开关，默认开 | 关闭后隐藏首页心情卡片 |
 | | 心情表情 | 单行文本 | **自己输入**（用系统输入法的 emoji 面板挑，不做固定候选列表）；按 UTF-16 单元 ≤ 8 截断，与云端校验同口径 |
 | | 心情文案 | 多行文本 | 本地落草稿（debounce 500ms），防误触丢失；表情与文案一起存，同一次磁盘写入 |
+| **本机记录** | 记录本机电量历史 | 开关，默认**关** | 首页电量图表的数据源；采样是上报的副产物，上报关闭时也不记 |
+| | 清空记录 | 按钮 + 二次确认 | 只删 `battery_samples`；关掉开关只是不再记新的，已有历史仍在 |
+| | 记录本机心情历史 | 开关，默认**关** | 与电量开关**独立**；只记真的发送成功的那条，草稿/去重跳过/失败都不记 |
+| | 清空心情记录 | 按钮 + 二次确认 | 只删 `mood_events`，**电量历史不受影响**（反之亦然：两个入口刻意不合并） |
 | **保活** | 电池优化白名单 | 状态 + 引导按钮 | 未加白时首页显示黄色提示 |
 | | 精确闹钟 | 状态 + 引导按钮 | Android 14+ 默认拒绝 |
 | | 系统自启动 | 用户确认状态 + 引导 + 确认/撤销 | 按厂商启发式显示；不查询系统开关，跳设置页后由用户确认，可随时撤销（见 9.8） |
@@ -275,7 +280,7 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 
 > **v1 明确不需要**：WebKit、Firebase/FCM。
 
-> **Room 是例外（2026-10 起启用）**：本机电量历史一开始是 DataStore 里的一个 JSON blob（7 天 / 2048 点上限），因为「保留期永久」把上限这条路堵死了——10 分钟一条一年就 5 万条，再整段重写不可接受。于是照 RainyToken 换成 Room 2.7.1 + KSP（一张 `battery_samples` 表，写一条是一次 INSERT），顺带为 T3 本机心情历史留了位置。**离线队列仍然用 DataStore**（压成「最多一条待发」，不值得上 Room）。
+> **Room 是例外（2026-10 起启用）**：本机电量历史一开始是 DataStore 里的一个 JSON blob（7 天 / 2048 点上限），因为「保留期永久」把上限这条路堵死了——10 分钟一条一年就 5 万条，再整段重写不可接受。于是照 RainyToken 换成 Room 2.7.1 + KSP，现在有**两张表**：`battery_samples`（电量，写一条是一次 INSERT）与 `mood_events`（心情，主键就是事件时刻）。加第二张表时手写了 `MIGRATION_1_2`——`exportSchema = false` 且没配 `room.schemaLocation`，`AutoMigration` 在这个配置下根本用不了。**离线队列仍然用 DataStore**（压成「最多一条待发」，不值得上 Room）。
 
 **必须复刻 RainyToken 的两段 ARM64 proot workaround**（`aapt2` 强制 `linux-aarch64` + `guardReleaseResources`），否则 Release APK 会静默缺资源。
 

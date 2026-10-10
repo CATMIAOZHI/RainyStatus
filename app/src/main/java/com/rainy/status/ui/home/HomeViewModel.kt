@@ -7,12 +7,14 @@ import com.rainy.status.R
 import com.rainy.status.data.device.DeviceStateReader
 import com.rainy.status.data.local.AppSettings
 import com.rainy.status.data.local.HistoryStore
+import com.rainy.status.data.local.MoodHistoryStore
 import com.rainy.status.data.local.RuntimeState
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.repository.ReportOutcome
 import com.rainy.status.data.repository.StatusRepository
 import com.rainy.status.domain.history.BatterySample
+import com.rainy.status.domain.history.MoodEvent
 import com.rainy.status.domain.model.DeviceSnapshot
 import com.rainy.status.domain.model.MoodEmoji
 import com.rainy.status.domain.model.ReportTrigger
@@ -47,6 +49,13 @@ data class HomeUiState(
      * 图表卡片的两个时间档都从这份数据里切窗口。
      */
     val history: List<BatterySample> = emptyList(),
+    /**
+     * 本机心情历史（最近几条，最新在前）。
+     *
+     * 只在这台手机上、且用户在设置里打开「记录本机心情历史」之后才会有内容；
+     * 记的是**发出去的那一条**，草稿不算。
+     */
+    val moodHistory: List<MoodEvent> = emptyList(),
     val throttled: Boolean = false,
     val keepAlive: KeepAliveStatus = KeepAliveStatus(),
     /**
@@ -93,6 +102,7 @@ class HomeViewModel @Inject constructor(
     private val settingsStore: SettingsStore,
     private val runtimeStateStore: RuntimeStateStore,
     private val historyStore: HistoryStore,
+    private val moodHistoryStore: MoodHistoryStore,
     private val deviceReader: DeviceStateReader,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -114,6 +124,11 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             historyStore.samples.collect { samples -> _uiState.update { it.copy(history = samples) } }
+        }
+        // 与上面的电量历史同一写法：无条件订阅，显不显示由 UI 分支决定。
+        // Room 读 3 行的开销可以忽略，不值得为它单独引 flatMapLatest 做开关门控。
+        viewModelScope.launch {
+            moodHistoryStore.recent().collect { events -> _uiState.update { it.copy(moodHistory = events) } }
         }
         refreshSnapshot()
         refreshKeepAlive()
@@ -247,7 +262,9 @@ class HomeViewModel @Inject constructor(
                 is ReportOutcome.Skipped -> when (outcome.reason) {
                     "mood-disabled" -> UiText.Resource(R.string.home_mood_disabled)
                     "empty" -> UiText.Resource(R.string.home_mood_empty)
-                    // "unchanged"：内容与上次相同，服务端本来就不会变，静默即可
+                    // "unchanged"：内容与上次相同，服务端本来就不会变，也不会记一条本机历史。
+                    // 不吭声的话，用户看到的是「发送成功、列表没变化」，会以为记录坏了
+                    "unchanged" -> UiText.Resource(R.string.home_mood_unchanged)
                     else -> null
                 }
                 is ReportOutcome.Failed -> UiText.Resource(

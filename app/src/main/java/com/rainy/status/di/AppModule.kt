@@ -7,6 +7,9 @@ import com.rainy.status.data.device.DeviceStateReader
 import com.rainy.status.data.local.BatterySampleDao
 import com.rainy.status.data.local.HistoryDatabase
 import com.rainy.status.data.local.HistoryStore
+import com.rainy.status.data.local.MIGRATION_1_2
+import com.rainy.status.data.local.MoodEventDao
+import com.rainy.status.data.local.MoodHistoryStore
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
 import com.rainy.status.data.local.historyDataStore
@@ -112,17 +115,29 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideMoodHistoryStore(dao: MoodEventDao): MoodHistoryStore = MoodHistoryStore(dao)
+
+    @Provides
+    @Singleton
     fun provideHistoryDatabase(
         @ApplicationContext context: Context
     ): HistoryDatabase = Room.databaseBuilder(
         context.applicationContext,
         HistoryDatabase::class.java,
         HistoryDatabase.NAME,
-    ).build()
+    )
+        // 手写迁移，**绝不能**改成 fallbackToDestructiveMigration()：
+        // 这里存的是「永久保留」的本机历史，丢了没有第二份
+        .addMigrations(MIGRATION_1_2)
+        .build()
 
     @Provides
     @Singleton
     fun provideBatterySampleDao(database: HistoryDatabase): BatterySampleDao = database.samples()
+
+    @Provides
+    @Singleton
+    fun provideMoodEventDao(database: HistoryDatabase): MoodEventDao = database.moods()
 
     @Provides
     @Singleton
@@ -135,6 +150,7 @@ object AppModule {
         settingsStore: SettingsStore,
         runtimeStateStore: RuntimeStateStore,
         historyStore: HistoryStore,
+        moodHistoryStore: MoodHistoryStore,
         api: StatusApi,
         deviceReader: DeviceStateReader,
         json: Json,
@@ -142,6 +158,7 @@ object AppModule {
         settingsStore = settingsStore,
         runtimeStateStore = runtimeStateStore,
         historyStore = historyStore,
+        moodHistoryStore = moodHistoryStore,
         api = api,
         deviceReader = deviceReader,
         json = json,

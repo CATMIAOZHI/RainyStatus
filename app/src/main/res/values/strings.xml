@@ -49,7 +49,10 @@
     <string name="home_mood_sent">Mood updated</string>
     <string name="home_mood_too_long">Too long (max %1$d characters)</string>
     <string name="home_mood_empty">Write something first</string>
-    <string name="home_mood_disabled">Mood sharing is off in Settings</string>
+    <string name="home_mood_unchanged">Same as last time — nothing new was sent</string>
+    <string name="home_mood_recent_title">Recent moods</string>
+    <string name="home_mood_recent_empty">Moods you send will show up here.</string>
+    <string name="home_mood_disabled">Mood sharing is off in settings</string>
     <string name="home_keepalive_title">Keep-alive</string>
     <string name="home_keepalive_battery">Battery optimization whitelist</string>
     <string name="home_keepalive_battery_ok">Allowed — good</string>
@@ -140,8 +143,15 @@
     <string name="settings_history_count">%1$d points recorded</string>
     <string name="settings_history_clear">Clear</string>
     <string name="settings_history_clear_confirm">Clear local history?</string>
-    <string name="settings_history_clear_body">This deletes all %1$d points stored on this phone and cannot be undone. Cloud history and the public chart are not affected.</string>
+    <string name="settings_history_clear_body">This deletes all %1$d points stored on this phone and cannot be undone. Your local mood history, cloud history and the public chart are not affected.</string>
     <string name="settings_history_cleared">Local history cleared</string>
+    <string name="settings_mood_history">Keep local mood history</string>
+    <string name="settings_mood_history_hint">Saved on this phone only and never uploaded. Only moods sent after you turn this on are recorded.</string>
+    <string name="settings_mood_history_count">%1$d entries</string>
+    <string name="settings_mood_history_clear">Clear mood history</string>
+    <string name="settings_mood_history_clear_confirm">Clear local mood history?</string>
+    <string name="settings_mood_history_clear_body">This deletes all %1$d mood entries stored on this phone and cannot be undone. Battery history is not affected, and the mood on your status page stays.</string>
+    <string name="settings_mood_history_cleared">Local mood history cleared</string>
 
     <string name="settings_keepalive_battery">Battery optimization whitelist</string>
     <string name="settings_keepalive_alarm">Exact alarms</string>

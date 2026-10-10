@@ -4,6 +4,7 @@ import com.rainy.status.data.debug.DebugLog
 import com.rainy.status.data.device.DeviceStateReader
 import com.rainy.status.data.local.AppSettings
 import com.rainy.status.data.local.HistoryStore
+import com.rainy.status.data.local.MoodHistoryStore
 import com.rainy.status.data.local.RuntimeState
 import com.rainy.status.data.local.RuntimeStateStore
 import com.rainy.status.data.local.SettingsStore
@@ -13,6 +14,8 @@ import com.rainy.status.data.remote.StatusApi
 import com.rainy.status.data.remote.dto.HeartbeatRequestDto
 import com.rainy.status.data.remote.dto.MoodRequestDto
 import com.rainy.status.domain.history.BatterySample
+import com.rainy.status.domain.history.MoodEvent
+import com.rainy.status.domain.history.MoodTimeline
 import com.rainy.status.domain.model.DeviceSnapshot
 import com.rainy.status.domain.model.FieldOptions
 import com.rainy.status.domain.model.ReportTrigger
@@ -65,6 +68,7 @@ class StatusRepository(
     private val settingsStore: SettingsStore,
     private val runtimeStateStore: RuntimeStateStore,
     private val historyStore: HistoryStore,
+    private val moodHistoryStore: MoodHistoryStore,
     private val api: StatusApi,
     private val deviceReader: DeviceStateReader,
     private val json: Json,
@@ -253,6 +257,24 @@ class StatusRepository(
                 // 心情写入同样消耗一次 KV 写，必须计入预算：否则连发心情会绕过降频保护，
                 // 真实写入量超出账号级 1000/天时心跳先被拒，而 App 还显示「没超」
                 recordKvWrite(runtime, System.currentTimeMillis())
+                // 本机心情历史：只记**真的发出去的那一条**（草稿、去重跳过的、失败的都不记）。
+                // 位置是刻意的——必须在 setLastMood / recordKvWrite **之后**，而且用 runCatching 包住：
+                // 磁盘异常若冒泡出去，调用方会当成「发送失败」→ 草稿不清空 → 用户重发一次，
+                // 而 KV 其实早就写成功了，云端就多一行。
+                if (settings.moodHistoryEnabled) {
+                    runCatching {
+                        moodHistoryStore.record(
+                            MoodEvent(
+                                at = MoodTimeline.recordedAt(
+                                    result.value.updatedAt,
+                                    System.currentTimeMillis(),
+                                ),
+                                text = trimmed,
+                                emoji = trimmedEmoji,
+                            )
+                        )
+                    }.onFailure { DebugLog.w(TAG, "Mood history dropped: ${it.message}") }
+                }
                 DebugLog.i(TAG, "Mood sent OK")
                 ReportOutcome.Success(result.value.updatedAt)
             }

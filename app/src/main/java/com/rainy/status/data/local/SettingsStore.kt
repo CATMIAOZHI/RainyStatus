@@ -42,6 +42,14 @@ data class AppSettings(
      * 但既然承诺了「三个开关分开、默认全关」，默认值就不能悄悄改成开。
      */
     val historyEnabled: Boolean = false,
+    /**
+     * 是否在本机留一份心情历史（首页「最近的心情」的数据源）。
+     *
+     * 与 [historyEnabled] **分开**：心情比电量私密得多，不该让「想看电量曲线」的人
+     * 顺手把心情也记下来；两项写入时机也完全不同（一个跟心跳，一个只在发送成功时）。
+     * 同样默认关，同样只留在本机、不上传。
+     */
+    val moodHistoryEnabled: Boolean = false,
     val themeMode: String = THEME_SYSTEM,
     /**
      * 用户**自述**已在系统里打开厂商的「自启动」开关。
@@ -98,6 +106,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             deviceName = prefs[KEY_DEVICE_NAME] ?: "",
             moodEnabled = prefs[KEY_MOOD_ENABLED] ?: true,
             historyEnabled = prefs[KEY_HISTORY_ENABLED] ?: false,
+            moodHistoryEnabled = prefs[KEY_MOOD_HISTORY_ENABLED] ?: false,
             themeMode = prefs[KEY_THEME] ?: AppSettings.THEME_SYSTEM,
             autostartConfirmed = prefs[KEY_AUTOSTART_CONFIRMED] ?: false,
         )
@@ -122,6 +131,9 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
     /** 本地电量历史开关；关掉只是不再记录，已记录的样本保留（可随时再打开） */
     suspend fun setHistoryEnabled(value: Boolean) = put { it[KEY_HISTORY_ENABLED] = value }
+
+    /** 本机心情历史开关；关掉只是不再记新的，已有记录保留（要删走「清空心情记录」） */
+    suspend fun setMoodHistoryEnabled(value: Boolean) = put { it[KEY_MOOD_HISTORY_ENABLED] = value }
 
     /** 保存或撤销用户确认；不读取或修改系统「自启动」开关。 */
     suspend fun setAutostartConfirmed(value: Boolean) = put { it[KEY_AUTOSTART_CONFIRMED] = value }
@@ -153,6 +165,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
         private val KEY_MOOD_ENABLED = booleanPreferencesKey("mood_enabled")
         private val KEY_HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
+        private val KEY_MOOD_HISTORY_ENABLED = booleanPreferencesKey("mood_history_enabled")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
         /** 系统「自启动」的可撤销用户确认，非系统状态；见 [AppSettings.autostartConfirmed] */
         private val KEY_AUTOSTART_CONFIRMED = booleanPreferencesKey("autostart_confirmed")

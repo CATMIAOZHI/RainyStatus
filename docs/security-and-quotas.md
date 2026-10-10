@@ -32,9 +32,9 @@
 |---|---|
 | 随机查询串（`?x=`）绕过缓存 | 免费版 Cache Key **不支持忽略查询串** → 用 WAF 拦掉带 `?` 的请求 |
 | 随机路径泛洪 | WAF 白名单只放行 `/status.json` |
-| 归一化路径变体（`//x`、`%2E`、`/x/` 等）绕过路径检查 | 路径要用 **`raw.http.request.uri.path` 原样精确匹配**：只查归一化后的 `http.request.uri.path` 会被绕过——WAF 看的是归一化路径，缓存键/回源未必，每个新变体都会各自回源（读数放大器）。复测补充：`raw` 保编码差异（`%2E`、`%20`、大小写、`;`、尾点都被拦）；**点段（`/./x`、`/a/../x`）在 raw 层也被归一化**，会放行，但与正常路径**同缓存键**（命中同一条目，非放大） |
+| 归一化路径变体（`//x`、`%2E`、`/x/` 等）绕过路径检查 | 路径要用 **`raw.http.request.uri.path` 原样精确匹配**：只查归一化后的 `http.request.uri.path` 会被绕过——WAF 看的是归一化路径，缓存键/回源未必，每个新变体都会各自回源（读数放大器）。复测补充：`raw` 保编码差异（`%2E`、`%20`、大小写、`;`、尾点都被拦）；**点段（`/./x`、`/a/../x`）同样被 raw 规则拦 403**——复测必须加 `curl --path-as-is`，不加会被 curl 自己的点段归一化骗成「200 未拦」 |
 | 默认缓存键请求头增殖（`Origin` + 九头：`x-http-method-override`、`x-http-method`、`x-method-override`、`x-forwarded-host`、`x-host`、`x-forwarded-scheme`、`x-original-url`、`x-rewrite-url`、`forwarded`） | 官方 cache-keys 明列这十类头进 **CF 默认缓存键**（不只是 `Vary: Origin`）：每个新值各占一条缓存条目、缺失时回源（读数放大器）。WAF⑤ = `Origin` 白名单 + 九头**存在即拒**（`any([*] ne "") or any([*] eq "")`，空值/重复/多值一并拦）；实测换值即 MISS、修复后九头全 403 |
-| host 写法变体（大小写 / 端口 / 尾点） | 大小写、`:443`、`Host:` 变体实测**同缓存键**（CF 归一化，无放大）；尾点 `host.`：非法形态被 WAF 403，合法 `/status.json` 形态 401 + 不缓存（未读出对象，R2 host 校验拒绝） |
+| host 写法变体与**备用端口** | 大小写、`:443`、`Host:` 变体实测**同缓存键**（CF 归一化，无放大）；**备用 HTTPS 端口（8443/2053/2083/2087/2096）不走缓存（`DYNAMIC`）→ 每请求直达 R2**，已用**端口白名单（只放行 443/80）**封闭（HTTP 备用端口本来就被 Always Use HTTPS 301；封闭后 http 备用端口也直接 403）；尾点 `host.`：非法形态 403，合法 `/status.json` 形态 401 + 不缓存（未读出对象，R2 host 校验拒绝） |
 | `r2.dev` 开发域直连 | **关闭**；熔断时也把它一起关（它不走我们的缓存规则与 WAF） |
 | 非 GET/HEAD 请求 | 不缓存；WAF 一并拦 |
 | 各边缘机房各自回源 | 开 **Smart Tiered Cache**；不开时最坏 ≈ $19.7/月 |
@@ -51,8 +51,8 @@
 - **Token 最小权限**：`Account Analytics:Read` + `Workers R2 Storage:Write`，独立 token，别复用部署 token。
 - **已知限制**：Analytics 用量数据的新鲜度官方**没有 SLA**（文档自述可能不即时）——**熔断不是实时刹车，是按小时兜底的止损**。开启前先实测滞后。
 
-费用估算（红队/审计口径，**不是硬上界**）：滞后 1 小时 ≈ $4–6.5；6 小时 ≈ $22；12 小时才发现 ≈ $42；完全没熔断、被刷整月 ≈ $2588。
-数字依赖「Analytics 在估算窗口内送达」的假设——官方无新鲜度 SLA，且查询失败时熔断 fail-open（只 warn 不动手）。**防付费的真正保证来自回源面封闭**：能影响缓存键的输入只有 URL（scheme/host/path/query）、`Origin` 与那九个请求头，全部受 WAF + 缓存规则约束；熔断只是兜底止损。
+费用估算（红队/审计口径，**不是硬上界**）：`费用 ≈ 超额 ops × $0.36/百万`，`ops ≈ 攻击速率 R × 检测窗口`；R=1k rps 跑 1 小时 ≈ $1.3，20k rps 一次性 ≈ $6，100k rps ≈ $40（且免费 L7 DDoS 缓解大概率提前介入）；完全没熔断、被刷整月 ≈ $2588。
+它有**三个前提**：攻击速率无上限、Analytics 无新鲜度 SLA、查询失败时 fail-open（只 warn 不动手）——所以不是硬上界。Free 版没有边缘速率限制产品（Pro+ 才有），硬限制只能靠：**端口白名单（恢复缓存限速）+ 预算提醒（官方明示不会暂停用量）+ guard token 有效期监控（防过期后永久静默 fail-open）**。**回源面封闭仍是主防线**（能影响缓存键的输入只有 URL、`Origin` 与那九个请求头，全部受 WAF + 缓存规则约束），熔断只是兜底。
 
 ## 5. 开启 / 关闭操作清单（顺序不能反）
 
@@ -61,10 +61,10 @@
 1. 控制台开通 R2（可能需绑定支付方式）；顺手配一个**预算提醒邮件**（只是提醒，不是保险）。
 2. 建桶（如 `rainystatus-data`）→ 接自定义域（如 `data.example.com`）→ **关闭 r2.dev** → 给桶配 CORS（允许网页域的 GET）→ 顺手开 zone 级 **Always Use HTTPS**（实测自定义域的 `http://` 也会 301）。
 3. Cache Rule：整域（`http.host eq "data.example.com"`）→ Eligible for cache + Edge TTL「忽略源站、60s」+ 浏览器 TTL override 60s。
-4. WAF 规则（五条，都限定数据主机名）：拦非 GET/HEAD、拦带查询串、`http.request.uri.path` 恰为 `/status.json`、**`raw.http.request.uri.path` 恰为 `/status.json`**（防编码类归一化变体）、**`Origin` 白名单 + 九个默认缓存键头存在即拒**（`any([*] ne "") or any([*] eq "")`；防按值增殖回源）。
+4. WAF 规则（五条，都限定数据主机名）：拦非 GET/HEAD、拦带查询串、`http.request.uri.path` 恰为 `/status.json`、**`raw.http.request.uri.path` 恰为 `/status.json`**（防编码类归一化变体）、**`Origin` 白名单 + 九个默认缓存键头存在即拒 + 端口白名单**（前者 `any([*] ne "") or any([*] eq "")`；后者 `not (cf.edge.server_port eq 443 or cf.edge.server_port eq 80)`——备用端口不走缓存，见 §3）。
 5. 开 Smart Tiered Cache。
 6. Worker：`r2_buckets` 绑定 `DATA_BUCKET` + `DATA_*` / `GUARD_*` vars + `npx wrangler secret put CF_GUARD_TOKEN`。页面可加 `<meta name="rainystatus-data-base" content="https://data.example.com">`（不加也行：接口会下发地址，只是每浏览器第一次仍打一次 Worker）。
-7. 部署 → 实测：连续请求第 2 次起 `cf-cache-status: HIT`、带 `?rand=` 被边缘挡、HEAD 走缓存、CORS 头正确、`guard_state` 可读；再补测：编码类路径变体（`//x`、`%2E`、`/x/`）被拦（点段 `/./x` 与正常路径同键、放行不算漏）、非网页域 `Origin` 被拦、**九个头各发一次全 403**（含空值头 `-H 'X-Forwarded-Host;'` 与重复头）。
+7. 部署 → 实测：连续请求第 2 次起 `cf-cache-status: HIT`、带 `?rand=` 被边缘挡、HEAD 走缓存、CORS 头正确、`guard_state` 可读；再补测（路径变体一律加 `curl --path-as-is`，否则点段会被 curl 自己归一化成假象）：编码类路径变体（`//x`、`%2E`、`/x/`）与点段（`/./x`、`/a/../x`）全 403、非网页域 `Origin` 被拦、**九个头各发一次全 403**（含空值头 `-H 'X-Forwarded-Host;'` 与重复头）、**备用端口（`:8443` 等）一律 403**。
 8. 观察 1–2 天 Analytics 数据滞后，再确认「小时阈值」是否有效。
 
 关闭（任何时候）：

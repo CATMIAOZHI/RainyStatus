@@ -42,6 +42,7 @@
     <string name="home_state_throttled">Daily limit guard active — slowed down</string>
     <string name="home_mood_title">Current mood</string>
     <string name="home_mood_hint">What are you up to?</string>
+    <string name="home_mood_emoji_label">Emoji</string>
     <string name="home_mood_emoji_hint">Emoji (optional)</string>
     <string name="home_mood_emoji_full">Emoji field is full</string>
     <string name="home_mood_send">Send</string>

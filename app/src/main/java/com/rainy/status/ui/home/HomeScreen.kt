@@ -198,15 +198,6 @@ fun HomeScreen(
                 )
             }
 
-            item {
-                KeepAliveCard(
-                    status = state.keepAlive,
-                    autostartConfirmed = state.settings.autostartConfirmed,
-                    onOpenSettings = onOpenSettings,
-                    onConfirmAutostart = { viewModel.confirmAutostart(it) },
-                )
-            }
-
             if (state.settings.moodEnabled) {
                 item {
                     MoodCard(
@@ -234,6 +225,18 @@ fun HomeScreen(
                         }
                     )
                 }
+            }
+
+            // ── 保活检查 ──
+            // 刻意放在最下面：这是「装好之后折腾一次」的检查项，平时不该挡在
+            // 电量 / 上报 / 心情这些每天都要看的卡片前面。
+            item {
+                KeepAliveCard(
+                    status = state.keepAlive,
+                    autostartConfirmed = state.settings.autostartConfirmed,
+                    onOpenSettings = onOpenSettings,
+                    onConfirmAutostart = { viewModel.confirmAutostart(it) },
+                )
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -642,18 +645,12 @@ private fun MoodCard(
                 OutlinedTextField(
                     value = emoji,
                     onValueChange = onEmojiChange,
-                    modifier = Modifier
-                        .width(88.dp)
-                        // 这个框没有 label（88dp 装不下），给读屏一句说明，
-                        // 否则 TalkBack 焦点落到这里只会念出占位符 😊
-                        .semantics { contentDescription = emojiHint },
-                    placeholder = {
-                        Text(
-                            text = "😊",
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                    },
+                    modifier = Modifier.width(88.dp),
+                    // 这里**不能放 emoji 占位符**：空框里躺着一个 😊，看起来就是
+                    // 「已经默认选好表情了」，会被当成 bug（真发生过）。
+                    // 换成浮动 label：没填时框里显示「表情」，填了才浮到边上去。
+                    // label 本身就能被 TalkBack 念出来，不需要再手写 contentDescription。
+                    label = { Text(stringResource(R.string.home_mood_emoji_label)) },
                     singleLine = true,
                     textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                     shape = RoundedCornerShape(14.dp)

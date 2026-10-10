@@ -72,10 +72,13 @@
     <string name="home_history_range_7d">7 天</string>
     <string name="home_history_axis_now">现在</string>
     <string name="home_history_summary_24h">最近 %1$d%% · 最低 %2$d%% · 最高 %3$d%% · 充电 %4$d 次</string>
+    <string name="home_history_axis_today">今天</string>
+    <string name="home_history_axis_percent">%1$d%%</string>
+    <string name="home_history_charges_label">充电次数</string>
     <string name="home_history_day_count">%1$d 次</string>
     <string name="home_history_no_value">—</string>
     <string name="home_history_legend_24h">绿带＝正在充电；断口＝这段时间没有记录</string>
-    <string name="home_history_legend_7d">柱＝当天的最低–最高电量，柱下数字＝当天充电次数</string>
+    <string name="home_history_legend_7d">两端圆点表示每天最低与最高电量，区间很窄时合成一个点；今天尚未结束。</string>
     <string name="home_history_empty">还没有本机记录</string>
     <string name="home_history_empty_hint">每次上报都会记一个点，永久保留，除非手动清空</string>
     <string name="home_history_disabled">本地记录已关闭</string>

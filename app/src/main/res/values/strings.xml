@@ -72,10 +72,13 @@
     <string name="home_history_range_7d">7 d</string>
     <string name="home_history_axis_now">Now</string>
     <string name="home_history_summary_24h">Latest %1$d%% · low %2$d%% · high %3$d%% · charges: %4$d</string>
+    <string name="home_history_axis_today">Today</string>
+    <string name="home_history_axis_percent">%1$d%%</string>
+    <string name="home_history_charges_label">Charge sessions</string>
     <string name="home_history_day_count">%1$d</string>
     <string name="home_history_no_value">—</string>
     <string name="home_history_legend_24h">Green bands = charging · gaps = nothing was reported</string>
-    <string name="home_history_legend_7d">Bar = daily low–high battery range · number below = charge sessions that day</string>
+    <string name="home_history_legend_7d">Dots mark daily low and high; narrow ranges merge into a dot. Today is still in progress.</string>
     <string name="home_history_empty">No local history yet</string>
     <string name="home_history_empty_hint">One point per report, kept until you clear it</string>
     <string name="home_history_disabled">Local history is off</string>

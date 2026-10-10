@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -61,7 +61,7 @@ import java.time.format.DateTimeFormatter
  *
  * 与网页图表是同一套口径，只是数据源换成「本机记的 7 天」：
  * - **24 小时**：折线（断档不连线）+ 充电绿带 + 一行汇总；
- * - **7 天**：每天一根「最低–最高」区间条 + 每天充电次数（数字）。
+ * - **7 天**：每天一条「最低–最高」端点连线 + 独立的每日充电次数行。
  *
  * 刻意不做的东西：
  * - 不做周/月**平均电量**（电量是循环量，平均没有意义，见 `docs/roadmap.md`）；
@@ -154,33 +154,29 @@ private fun LineSection(samples: List<BatterySample>, now: Long, zone: ZoneId) {
     val bandColor = StatusGreen.copy(alpha = 0.20f)
     val gridColor = MaterialTheme.colorScheme.outlineVariant
 
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(CHART_HEIGHT)
-            .semantics { contentDescription = description }
+    BatteryPlot(
+        description = description,
+        draw = {
+            drawGrid(gridColor)
+            drawChargeBands(window, axisFrom, now, bandColor)
+            drawBatteryLine(points, axisFrom, now, lineColor)
+        }
     ) {
-        drawGrid(gridColor)
-        drawChargeBands(window, axisFrom, now, bandColor)
-        drawBatteryLine(points, axisFrom, now, lineColor)
-    }
-
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 6.dp)) {
-        Text(timeLabel(axisFrom, zone), style = MaterialTheme.typography.labelSmall, color = inkMuted())
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = timeLabel(axisFrom + (now - axisFrom) / 2, zone),
-            style = MaterialTheme.typography.labelSmall,
-            color = inkMuted()
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = stringResource(R.string.home_history_axis_now),
-            style = MaterialTheme.typography.labelSmall,
-            color = inkMuted()
-        )
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            Text(timeLabel(axisFrom, zone), style = MaterialTheme.typography.labelSmall, color = inkMuted())
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = timeLabel(axisFrom + (now - axisFrom) / 2, zone),
+                style = MaterialTheme.typography.labelSmall,
+                color = inkMuted()
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = stringResource(R.string.home_history_axis_now),
+                style = MaterialTheme.typography.labelSmall,
+                color = inkMuted()
+            )
+        }
     }
 
     Text(
@@ -213,39 +209,51 @@ private fun DailySection(samples: List<BatterySample>, now: Long, zone: ZoneId) 
     val barColor = StrawberryPink
     val gridColor = MaterialTheme.colorScheme.outlineVariant
 
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(CHART_HEIGHT)
-            .semantics { contentDescription = description }
+    BatteryPlot(
+        description = description,
+        draw = {
+            val slot = size.width / days.size
+            drawRect(
+                color = barColor.copy(alpha = 0.08f),
+                topLeft = Offset(size.width - slot, CHART_INSET.toPx()),
+                size = Size(slot, size.height - CHART_INSET.toPx() * 2)
+            )
+            drawGrid(gridColor)
+            drawDailyBars(days, barColor)
+        }
     ) {
-        drawGrid(gridColor)
-        drawDailyBars(days, barColor)
-    }
-
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 6.dp)) {
-        days.forEach { day ->
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            days.forEachIndexed { index, day ->
+                val today = index == days.lastIndex
                 Text(
-                    text = dayLabel(day.dayStartMs, zone),
+                    text = if (today) stringResource(R.string.home_history_axis_today)
+                        else dayLabel(day.dayStartMs, zone),
                     style = MaterialTheme.typography.labelSmall,
-                    color = inkMuted()
+                    fontWeight = if (today) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (today) MaterialTheme.colorScheme.onSurface else inkMuted(),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
                 )
-                // 数字对齐在各自那一列下面，肉眼就能对上是哪一天：
-                // 没有数据的那天不显示 0（0 次 ≠ 不知道），用「—」区分开
+            }
+        }
+        Text(
+            text = stringResource(R.string.home_history_charges_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = inkMuted(),
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+        )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            days.forEach { day ->
+                // 未知与 0 次不同；保留独立列，与上方日期、区间中心对齐。
                 Text(
                     text = if (day.hasData) {
                         stringResource(R.string.home_history_day_count, day.chargeSessions)
-                    } else {
-                        stringResource(R.string.home_history_no_value)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (day.hasData) barColor else inkMuted()
+                    } else stringResource(R.string.home_history_no_value),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (day.hasData) MaterialTheme.colorScheme.onSurface else inkMuted(),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -261,20 +269,61 @@ private fun DailySection(samples: List<BatterySample>, now: Long, zone: ZoneId) 
 
 // ─── 绘制 ───
 
+/** 刻度用真实 Text 测量宽度，不写死侧栏宽度，系统大字号也不会被裁掉。 */
+@Composable
+private fun BatteryPlot(
+    description: String,
+    draw: DrawScope.() -> Unit,
+    labels: @Composable () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Layout(
+            modifier = Modifier.height(CHART_HEIGHT).padding(end = 8.dp),
+            content = {
+                listOf(100, 50, 0).forEach { level ->
+                    Text(
+                        text = stringResource(R.string.home_history_axis_percent, level),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = inkMuted()
+                    )
+                }
+            }
+        ) { measurables, constraints ->
+            val ticks = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+            val width = ticks.maxOfOrNull { it.width } ?: 0
+            val height = constraints.maxHeight
+            layout(width, height) {
+                ticks.forEachIndexed { index, tick ->
+                    val centerY = yFor(100 - index * 50, height.toFloat(), CHART_INSET.toPx())
+                    tick.placeRelative(width - tick.width, (centerY - tick.height / 2f).toInt())
+                }
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Canvas(
+                modifier = Modifier.fillMaxWidth().height(CHART_HEIGHT)
+                    .semantics { contentDescription = description },
+                onDraw = draw
+            )
+            labels()
+        }
+    }
+}
+
 private val CHART_HEIGHT = 140.dp
 
-/** 绘制区内边距：0% 与 100% 的点不能压在边框上，否则线宽会被裁掉一半 */
-private val CHART_INSET = 6.dp
+/** 上下留出半行刻度文字的空间，0% 与 100% 的端点也不会贴边。 */
+private val CHART_INSET = 12.dp
 
 private fun DrawScope.drawGrid(gridColor: Color) {
     val inset = CHART_INSET.toPx()
-    listOf(0, 25, 50, 75, 100).forEach { level ->
+    listOf(0, 50, 100).forEach { level ->
         val y = yFor(level, size.height, inset)
         drawLine(
-            color = gridColor,
+            color = gridColor.copy(alpha = if (level == 0) 0.9f else 0.55f),
             start = Offset(0f, y),
             end = Offset(size.width, y),
-            strokeWidth = 1.dp.toPx()
+            strokeWidth = (if (level == 0) 1.dp else 0.75.dp).toPx()
         )
     }
 }
@@ -306,7 +355,7 @@ private fun DrawScope.drawBatteryLine(
     lineColor: Color,
 ) {
     val inset = CHART_INSET.toPx()
-    val stroke = 2.dp.toPx()
+    val stroke = 3.dp.toPx()
     BatteryHistory.segments(points, BatteryHistory.LINE_GAP_MS).forEach { segment ->
         if (segment.size == 1) {
             val only = segment.first()
@@ -326,11 +375,33 @@ private fun DrawScope.drawBatteryLine(
                 val y = yFor(value, size.height, inset)
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
+            // 每个连续段独立闭合，淡粉填充绝不跨断档；与网页保持同一视觉语言。
+            // 这里刻意**不用 `addPath(线)` 再接 `lineTo` 收口**：`addPath` 之后「当前点」
+            // 归谁管要看底层实现，有的平台会从 (0,0) 拉一条斜边出来。自己走一遍轮廓最稳。
+            val area = Path().apply {
+                segment.forEachIndexed { index, sample ->
+                    val value = sample.b ?: return@forEachIndexed
+                    val x = xFor(sample.t, from, to, size.width)
+                    val y = yFor(value, size.height, inset)
+                    if (index == 0) moveTo(x, y) else lineTo(x, y)
+                }
+                lineTo(xFor(segment.last().t, from, to, size.width), size.height - inset)
+                lineTo(xFor(segment.first().t, from, to, size.width), size.height - inset)
+                close()
+            }
+            drawPath(area, color = lineColor.copy(alpha = 0.12f))
             drawPath(
                 path = path,
                 color = lineColor,
                 style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
+        }
+    }
+    points.lastOrNull()?.let { last ->
+        last.b?.let { value ->
+            val center = Offset(xFor(last.t, from, to, size.width), yFor(value, size.height, inset))
+            drawCircle(lineColor.copy(alpha = 0.18f), radius = 6.dp.toPx(), center = center)
+            drawCircle(lineColor, radius = 3.5.dp.toPx(), center = center)
         }
     }
 }
@@ -339,23 +410,17 @@ private fun DrawScope.drawDailyBars(days: List<DayRange>, barColor: Color) {
     if (days.isEmpty()) return
     val inset = CHART_INSET.toPx()
     val slot = size.width / days.size
-    val barWidth = minOf(slot - 8.dp.toPx(), 20.dp.toPx()).coerceAtLeast(6.dp.toPx())
-    // 圆角最多 6dp。**不能**用 barWidth / 2：某天电量区间很窄时（比如只充了一会儿电），
-    // 柱子高度会小于半宽，圆角一夹就成了一个圆球——看着像「一个点」而不是「一段区间」。
-    val barRadius = minOf(barWidth / 2f, 6.dp.toPx())
     days.forEachIndexed { index, day ->
         val min = day.min ?: return@forEachIndexed
         val max = day.max ?: return@forEachIndexed
         val centerX = slot * index + slot / 2f
-        val top = yFor(max, size.height, inset)
-        val bottom = yFor(min, size.height, inset)
-        drawRoundRect(
-            color = barColor,
-            topLeft = Offset(centerX - barWidth / 2f, top),
-            // 当天电量没变（min == max）时给一个最小高度，否则柱子是一条看不见的零高矩形
-            size = Size(barWidth, (bottom - top).coerceAtLeast(4.dp.toPx())),
-            cornerRadius = CornerRadius(barRadius)
-        )
+        val top = Offset(centerX, yFor(max, size.height, inset))
+        val bottom = Offset(centerX, yFor(min, size.height, inset))
+        // 这是低–高区间，不是从零起算的柱状图；细连接线与两个端点表达真实范围。
+        // 窄区间的端点自然合成一个点，不人为向下拉长、也不画悬空横杠。
+        drawLine(barColor, top, bottom, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(barColor, radius = 3.dp.toPx(), center = top)
+        drawCircle(barColor, radius = 3.dp.toPx(), center = bottom)
     }
 }
 

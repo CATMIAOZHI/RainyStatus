@@ -15,7 +15,7 @@
 | 请求体 | `Content-Type: application/json`，body ≤ 4096 字节 |
 | 错误体 | 统一 `{ "ok": false, "error": { "code": "...", "message": "..." } }` |
 | CORS | **不发任何 CORS 头**（网页与 API 同源部署）。浏览器跨域调用会被浏览器侧拦截 |
-| 缓存 | 默认 `Cache-Control: no-store`。例外：`/api/status` 带 30 秒机房内缓存（见该节） |
+| 缓存 | **回给浏览器的一律 `Cache-Control: no-store`**。`/api/status` 另有 30 秒**机房内**缓存（只省 KV 读，见该节） |
 
 ---
 
@@ -97,8 +97,9 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 
 **展示开关是服务端过滤，不是前端隐藏**：`SHOW_TEMPERATURE` / `SHOW_NETWORK` 关闭时，`device.temperatureC` / `device.network` 在响应里就是 `null`；`SHOW_MOOD` 关闭时 `mood` 整体为 `null`。直接 `curl` 也拿不到——否则这个开关只是「看起来关了」。
 
-**30 秒缓存**：`/api/status` 每次请求要读 2 个 KV key，而 KV 免费只有 10 万读/天，不缓存约 5 万次请求就能打光。缓存写在**机房内**（`caches.default`），缓存键是固定内部地址（`?lang=`、自定义 Host、随机参数都不参与），所以：
+**30 秒缓存（只服务 KV 额度，不是浏览器缓存）**：`/api/status` 每次请求要读 2 个 KV key，而 KV 免费只有 10 万读/天，不缓存约 5 万次请求就能打光。缓存写在**机房内**（`caches.default`），缓存键是固定内部地址（`?lang=`、自定义 Host、随机参数都不参与），所以：
 
+- **只有缓存副本带 `max-age=30`，回给浏览器的响应永远是 `no-store`**。Cloudflare 站点级的 Browser Cache TTL（默认 **4 小时**，`cache_level=aggressive` 时命中缓存必改写 `Cache-Control`）会把这个 `max-age` 放大——曾经浏览器就真的把状态存了 4 小时，「刷新网页也不更新」。前端 `fetch` 另带 `cache: 'no-store'` 双保险；
 - KV 异常返回 **503 且不写缓存**（避免把故障状态粘住 30 秒）；
 - 改了 `vars` 后最多有 **30 秒**的旧响应窗口（缓存里仍是旧配置）；
 - `HEAD` 复用 GET 的缓存，但**不回传 body**；

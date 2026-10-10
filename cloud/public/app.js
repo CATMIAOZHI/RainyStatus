@@ -486,7 +486,10 @@ function render(data) {
 
 async function load() {
   try {
-    const res = await fetch('/api/status', { headers: { accept: 'application/json' } });
+    // cache: 'no-store'：刷新页面必须真的去问服务端。
+    // 响应头我们已经发 no-store，但 Cloudflare 站点级的 Browser Cache TTL 会在
+    // 命中缓存时把它改写成几小时（默认 4 小时）—— 这里显式绕过，双保险。
+    const res = await fetch('/api/status', { cache: 'no-store', headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     render(data);

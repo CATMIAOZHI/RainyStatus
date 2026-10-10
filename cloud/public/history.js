@@ -373,7 +373,8 @@
     // Turnstile 令牌放自定义头：同源请求，不放进 URL（URL 会进日志与 Referer）
     if (token) headers['cf-turnstile-response'] = token;
 
-    const res = await fetch(`/api/history?range=${RANGE}`, { headers });
+    // 同 app.js：点「加载图表」必须真去拿一次，不能吃浏览器里那份旧缓存
+    const res = await fetch(`/api/history?range=${RANGE}`, { cache: 'no-store', headers });
     if (res.status === 403) throw new Error('denied');
     if (res.status === 503) throw new Error('unavailable');
     if (!res.ok) throw new Error('failed');

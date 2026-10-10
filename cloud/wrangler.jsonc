@@ -41,7 +41,7 @@
   // ── 站点可配置项：别人部署后改成自己的 ──
   "vars": {
     "SITE_TITLE": "RainyStatus",
-    "OWNER_NAME": "WaterRainCat",
+    "OWNER_NAME": "RainyStatus",
     "AVATAR_EMOJI": "☔",
     // 头像图片：填了就用图片，没配或加载失败用上面的 AVATAR_EMOJI。
     // 三种写法都行：站内路径 "/avatar.png"（把图放进 cloud/public/）、

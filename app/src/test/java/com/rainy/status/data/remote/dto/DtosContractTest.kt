@@ -32,7 +32,7 @@ class DtosContractTest {
         chargeSource = "ac",
         temperatureC = 31.5,
         network = "wifi",
-        deviceName = "WaterRainCat-Phone",
+        deviceName = "My-Phone",
         appVersion = "1.0.0",
         clientTs = 1_759_211_879_500L,
         seq = 12345L,

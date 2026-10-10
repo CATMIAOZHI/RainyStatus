@@ -1,6 +1,6 @@
 # 雨晴Status · 设计方案
 
-> 状态：**方案已定稿，工程已落地，云端已上线**（App + Worker + 静态页均已实现；2026-10-06 已部署到 `https://status.WaterRainCat.com`，自有域名 + KV 均已绑定）
+> 状态：**方案已定稿，工程已落地，云端已上线**（App + Worker + 静态页均已实现；2026-10-06 已用自有域名部署上线，域名 + KV 均已绑定）
 > 最后更新：2026-10-10
 
 ---
@@ -14,7 +14,7 @@ Android App 常驻后台，定时把手机电量 / 充电状态 / 在线心跳�
 ## 2. 架构
 
 ```
-Redmi K80 Pro                      Cloudflare                       访客
+Android 手机                       Cloudflare                       访客
 ┌──────────────┐                ┌──────────────────┐            ┌────────┐
 │ RainyStatus  │  每 10 分钟     │ Worker           │  HTTPS GET │ 浏览器 │
 │ 前台服务      │ ──HTTPS POST──▶│ status.<域名>     │◀──────────│        │
@@ -75,7 +75,7 @@ Redmi K80 Pro                      Cloudflare                       访客
     "chargeSource": "ac",
     "temperatureC": 31.5,
     "network": "wifi",
-    "deviceName": "WaterRainCat-Phone",
+    "deviceName": "My-Phone",
     "appVersion": "1.0.0"
   },
   "mood": { "text": "困了喵…", "emoji": "😴", "updatedAt": 1759200000000 }
@@ -90,7 +90,7 @@ Redmi K80 Pro                      Cloudflare                       访客
 ```json
 { "schemaVersion": 1, "batteryPercent": 87, "charging": true,
   "chargeSource": "ac", "temperatureC": 31.5, "network": "wifi",
-  "clientTs": 1759211879500, "deviceName": "WaterRainCat-Phone",
+  "clientTs": 1759211879500, "deviceName": "My-Phone",
   "appVersion": "1.0.0" }
 ```
 → `{ "ok": true, "receivedAt": 1759211880000, "nextExpectedInMs": 600000 }`
@@ -165,7 +165,7 @@ Redmi K80 Pro                      Cloudflare                       访客
 
 ### 核心结论：**每人部署自己的实例，不共用一台**
 
-原因：KV 写额度是 **Cloudflare 账号级**的 1,000 写/天。如果所有人上报到 `status.WaterRainCat.com`，144 写/天 × N 人，**约 6 人就会打爆**，而且一个 token 泄露就是所有人受影响。因此**共享单实例在免费额度下不可行**。
+原因：KV 写额度是 **Cloudflare 账号级**的 1,000 写/天。如果所有人上报到同一个实例，144 写/天 × N 人，**约 6 人就会打爆**，而且一个 token 泄露就是所有人受影响。因此**共享单实例在免费额度下不可行**。
 
 ### 模式 A（默认，推荐）：一键自部署
 
@@ -237,7 +237,7 @@ README 放置 **Deploy to Cloudflare 按钮**（Cloudflare 官方功能，已核
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `SITE_TITLE` | `RainyStatus` | 网页标题 |
-| `OWNER_NAME` | `WaterRainCat` | 网页上显示的主人名字 |
+| `OWNER_NAME` | `RainyStatus` | 网页上显示的主人名字 |
 | `AVATAR_EMOJI` | `☔` | 头像字符（没配图片时用它） |
 | `AVATAR_URL` | 空 | 头像图片：站内路径 `/avatar.png`（图放 `cloud/public/`）、`https://` 外链、或小尺寸 `data:image/png;base64,…`。配了用图片，加载失败自动退回 `AVATAR_EMOJI`；`http://` 不收（会被当混合内容拦掉） |
 | `OFFLINE_THRESHOLD_MS` | `1800000` | 掉线阈值（30 分钟） |
@@ -421,10 +421,10 @@ RainyStatus/
 
 | # | 决策点 | 建议 |
 |---|---|---|
-| D1 | Cloudflare API Token（部署用） | 官方模板 **Edit Cloudflare Workers**，资源范围限本账号 + `waterraincat.com` |
-| D2 | 首版版本号 | `versionCode 1` / `versionName "1.0.0"`，由水晴喵定 |
-| D3 | 保活权限是否引导（电池白名单 + 精确闹钟） | **需要**，不加白名单红米上 10 分钟精度做不到；仅影响 Google Play 上架场景 |
+| D1 | Cloudflare API Token（部署用） | 官方模板 **Edit Cloudflare Workers**，资源范围限本账号与自己的域名 |
+| D2 | 首版版本号 | `versionCode 1` / `versionName "1.0.0"`，由维护者定 |
+| D3 | 保活权限是否引导（电池白名单 + 精确闹钟） | **需要**，不加白名单时激进省电的国产 ROM（小米/华为/OPPO/vivo 等）上 10 分钟精度做不到；仅影响 Google Play 上架场景 |
 | D4 | 公开字段边界 | 温度 / 网络 / 设备名默认**关**，用户主动开 |
-| D5 | 是否允许提交现有骨架 | 需水晴喵点头 |
+| D5 | 是否允许提交现有骨架 | 需维护者确认 |
 | D6 | 是否上架 Google Play | 自用分发则 `specialUse` 零顾虑；上架需 FGS 声明 + 演示视频 |
 | D7 | 模式 B（单实例多设备）是否要做 | v1 不做；要做需升 Workers Paid |

@@ -29,7 +29,7 @@ const device: DeviceStatus = {
   chargeSource: 'ac',
   temperatureC: 31.5,
   network: 'wifi',
-  deviceName: 'WaterRainCat-Phone',
+  deviceName: 'My-Phone',
   appVersion: '1.0.0',
   seq: 42,
 };

@@ -127,7 +127,7 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `SITE_TITLE` | `RainyStatus` | 网页标题 |
-| `OWNER_NAME` | `WaterRainCat` | 网页上显示的主人名字 |
+| `OWNER_NAME` | `RainyStatus` | 网页上显示的主人名字 |
 | `AVATAR_EMOJI` | `☔` | 头像字符（没配图片时用它） |
 | `AVATAR_URL` | 空 | 头像图片。三种写法：站内路径 `/avatar.png`（把图放进 `cloud/public/`）、`https://` 外链、小尺寸 `data:image/png;base64,…`。配了就用图片，**图片加载失败会自动退回 `AVATAR_EMOJI`**；`http://` 会被浏览器当混合内容拦掉，所以不收 |
 | `OFFLINE_THRESHOLD_MS` | `1800000` | 掉线阈值（30 分钟） |
@@ -234,18 +234,17 @@ curl -X POST https://<你的-worker>.workers.dev/api/heartbeat \
 
 同账号下 zone 处于 active、且该主机名**没有已存在的 CNAME** 时，取消 `wrangler.jsonc` 末尾 `routes` 的注释并改成你的域名，同时把 `workers_dev` 改成 `false`（收敛扫描面）。Cloudflare 会自动建 DNS 记录并签发证书（可能等 1–2 分钟）。
 
-> **本仓库维护者请注意**：上面这段是给「部署自己实例的读者」的通用说明。
-> **本仓库自己**不要把真域名与真 KV id 提交进仓库 —— `wrangler.jsonc` 是给所有人
+> **提示**：上面这段是给「部署自己实例的读者」的通用说明。
+> 请**不要把真域名与真 KV id 提交进仓库** —— `wrangler.jsonc` 是给所有人
 > 一键部署用的模板，里面留着真域名会让别人的部署因为「zone 不存在」而失败。
-> 本仓库的做法是把它放进 `cloud/wrangler.prod.jsonc`（已被 `.gitignore` 忽略，**不进仓库**），
-> 部署线上实例时：
+> 自己部署线上实例时，把真值放在一份**不被仓库跟踪的本地配置**里（例如
+> `cloud/wrangler.prod.jsonc`，已在 `cloud/.gitignore` 里忽略，**不进仓库**）：
 >
 > ```bash
 > npx wrangler deploy -c wrangler.prod.jsonc
 > ```
 >
-> 改动 `wrangler.jsonc` 的公共项（assets / vars / 兼容日期）时，记得同步 prod 配置；
-> 而且改的是**你自己 fork 里的副本**，不要把这边的模板改回带真域名/真 id 的版本。
+> 改动 `wrangler.jsonc` 的公共项（assets / vars / 兼容日期）时，记得同步这份本地配置。
 
 ---
 

@@ -49,14 +49,14 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
     "chargeSource": "ac",
     "temperatureC": 31.5,
     "network": "wifi",
-    "deviceName": "WaterRainCat-Phone",
+    "deviceName": "My-Phone",
     "appVersion": "1.0.0",
     "clientTs": 1759211879500
   },
   "mood": { "text": "困了喵…", "emoji": "😴", "updatedAt": 1759200000000 },
   "site": {
     "title": "RainyStatus",
-    "owner": "WaterRainCat",
+    "owner": "RainyStatus",
     "avatar": "☔",
     "avatarUrl": null,
     "showTemperature": false,
@@ -122,7 +122,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
   "chargeSource": "ac",
   "temperatureC": 31.5,
   "network": "wifi",
-  "deviceName": "WaterRainCat-Phone",
+  "deviceName": "My-Phone",
   "appVersion": "1.0.0",
   "clientTs": 1759211879500,
   "seq": 12345

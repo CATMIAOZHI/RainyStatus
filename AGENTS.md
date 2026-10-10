@@ -11,7 +11,7 @@
 | 目录 | 内容 |
 |------|------|
 | `app/` | Android 客户端（Kotlin + Jetpack Compose），负责采集并上报心跳 |
-| `cloud/` | Cloudflare Worker（状态网页 + API），部署到 `status.WaterRainCat.com` |
+| `cloud/` | Cloudflare Worker（状态网页 + API），部署到自己的域名 |
 | `.github/workflows/` | CI（单测 / lint / 构建）与 Release（打 tag 触发） |
 
 ## 接口契约

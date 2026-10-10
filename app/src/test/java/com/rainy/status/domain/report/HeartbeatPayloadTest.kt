@@ -35,7 +35,7 @@ class HeartbeatPayloadTest {
         includeCharging = true,
         includeTemperature = true,
         includeNetwork = true,
-        deviceName = "WaterRainCat-Phone",
+        deviceName = "My-Phone",
     )
 
     /** 与 `validate.ts` 的 HEARTBEAT_KEYS 必须逐字一致 */

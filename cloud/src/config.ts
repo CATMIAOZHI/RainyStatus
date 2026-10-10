@@ -107,7 +107,7 @@ export function avatarImageUrl(value: string | undefined): string | null {
 export function siteConfig(env: Env): SiteConfig {
   return {
     title: str(env.SITE_TITLE, 'RainyStatus'),
-    owner: str(env.OWNER_NAME, 'WaterRainCat'),
+    owner: str(env.OWNER_NAME, 'RainyStatus'),
     avatar: str(env.AVATAR_EMOJI, '☔'),
     avatarUrl: avatarImageUrl(env.AVATAR_URL),
     showTemperature: bool(env.SHOW_TEMPERATURE, false),

@@ -359,7 +359,7 @@ private fun StatusCard(state: HomeUiState) {
  * 为什么必须有「其他上报失败」这一档：`lastErrorKind` 会被写入**所有**失败分类，
  * 但以前只识别 `Unauthorized`，于是地址填错（404）、服务端 5xx、DNS 失败等情况下
  * 首页仍显示绿色「正常」+ 一条早已过期的上次上报时间。
- * 这个 App 的全部意义就是「让水晴知道手机还活着」，心跳停了却报绿色最伤信任。
+ * 这个 App 的全部意义就是「让用户知道手机还活着」，心跳停了却报绿色最伤信任。
  */
 @Composable
 private fun StateLine(state: HomeUiState) {

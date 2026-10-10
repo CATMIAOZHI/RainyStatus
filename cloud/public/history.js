@@ -285,7 +285,7 @@
       min: min === null ? t('noValue') : `${min}%`,
       max: max === null ? t('noValue') : `${max}%`,
     }));
-    // 充电次数按水晴的要求直接给数字，不画成小柱子
+    // 充电次数直接给数字，不画成小柱子
     parts.push(t('sessions', { n: data.chargeSessions ?? 0 }));
     el('chartSummary').textContent = parts.join('　·　');
   }

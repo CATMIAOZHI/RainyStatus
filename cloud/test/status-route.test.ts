@@ -99,7 +99,8 @@ describe('GET /api/status 的缓存边界', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
     // 重建响应时不能把 content-type 也弄丢（丢了前端 res.json() 直接炸）
     expect(res.headers.get('content-type')).toContain('application/json');
-    expect((await res.json()).online).toBe(true);
+    const body = (await res.json()) as { online?: boolean };
+    expect(body.online).toBe(true);
     expect(calls.get).toBe(0);
     expect(puts.length).toBe(0);
   });

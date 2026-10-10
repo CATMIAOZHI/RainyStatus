@@ -23,8 +23,13 @@
       load: '加载图表',
       loading: '正在验证…',
       hint: '图表需要手动加载，并会先做一次人机验证。',
-      cached: '当前显示的是本地缓存，点「刷新图表」可获取最新数据。',
-      stale: '云端数据可能不是最新（最近一次生成：{t}）。',
+      freshThrough: '数据截至 {t}（{ago}）',
+      freshCached: '本地缓存副本 · 数据截至 {t}（{ago}）',
+      freshStale: '导出可能不是最新 · ',
+      agoNow: '刚刚',
+      agoMinutes: '{n} 分钟前',
+      agoHours: '{n} 小时前',
+      agoDays: '{n} 天前',
       empty: '这段时间还没有记录。',
       partial: '记录不完整：手机可能有一段时间没有上报。',
       failed: '图表读取失败，请稍后重试。',
@@ -47,8 +52,13 @@
       load: '載入圖表',
       loading: '正在驗證…',
       hint: '圖表需要手動載入，並會先做一次人機驗證。',
-      cached: '目前顯示的是本機快取，點「重新整理圖表」可取得最新資料。',
-      stale: '雲端資料可能不是最新（最近一次產生：{t}）。',
+      freshThrough: '資料截至 {t}（{ago}）',
+      freshCached: '本機快取副本 · 資料截至 {t}（{ago}）',
+      freshStale: '匯出可能不是最新 · ',
+      agoNow: '剛剛',
+      agoMinutes: '{n} 分鐘前',
+      agoHours: '{n} 小時前',
+      agoDays: '{n} 天前',
       empty: '這段時間還沒有紀錄。',
       partial: '紀錄不完整：手機可能有一段時間沒有上報。',
       failed: '圖表讀取失敗，請稍後重試。',
@@ -71,8 +81,13 @@
       load: 'Load chart',
       loading: 'Verifying…',
       hint: 'The chart loads on demand and asks for a quick human check first.',
-      cached: 'Showing a locally cached copy. Use “Refresh chart” for the latest data.',
-      stale: 'The cloud copy may be out of date (last built: {t}).',
+      freshThrough: 'Data through {t} ({ago})',
+      freshCached: 'Locally cached copy · data through {t} ({ago})',
+      freshStale: 'Export may be out of date · ',
+      agoNow: 'just now',
+      agoMinutes: '{n} min ago',
+      agoHours: '{n} h ago',
+      agoDays: '{n} d ago',
       empty: 'No samples in this window yet.',
       partial: 'Incomplete: the phone may have been offline for a while.',
       failed: 'Could not load the chart, please retry.',
@@ -112,6 +127,8 @@
   let geom = null;
   /** 指针是否正按在图表上：触摸时靠它区分「按住跟随」与「悬停跟随」 */
   let pressing = false;
+  /** 上一次把文案刷成哪种语言：用来判断「这次要不要重置读数行」（见 applyStatic） */
+  let renderedLang = '';
 
   function t(key, vars) {
     let text = (I18N[lang] || I18N['zh-Hans'])[key] || I18N['zh-Hans'][key] || key;
@@ -518,17 +535,56 @@
   function renderNote() {
     const note = el('chartNote');
     const notes = [];
-    if (fromCache) notes.push(t('cached'));
+    // 「显示的是本地缓存」与「云端导出掉队」两条都挪进了上面那行新鲜度（renderFreshness），
+    // 这里只留与数据本身有关的提示，避免同一件事说两遍
     if (payload && payload.availability === 'empty') notes.push(t('empty'));
     if (payload && payload.availability === 'partial') notes.push(t('partial'));
-    if (localStale) notes.push(t('stale', { t: clockFull(localStale) }));
     note.textContent = notes.join(' ');
+  }
+
+  /** 「多久之前」的人话 */
+  function relativeTime(elapsedMs) {
+    const minutes = Math.floor(Math.max(0, elapsedMs) / 60000);
+    if (minutes < 1) return t('agoNow');
+    if (minutes < 60) return t('agoMinutes', { n: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('agoHours', { n: hours });
+    return t('agoDays', { n: Math.floor(hours / 24) });
+  }
+
+  /**
+   * 数据新鲜度那一行：「数据截至 20:20（5 分钟前）」。
+   * 为什么必须有：图表读的是 Cron 每 15 分钟才重建一次的导出，前端还可能拿的是**本地缓存**——
+   * 不写清「这份数据到哪儿」，访客会把半小时前的数字当成刚刚刷新的。
+   * 三种来源共用这一行：本地缓存加前缀、云端导出掉队（>45 分钟）变橙色。
+   * 时间只写到分钟、当天不重复写日期：这行在手机竖屏上也就一行多一点点的宽度。
+   */
+  function renderFreshness(data) {
+    const line = el('chartFreshness');
+    if (!line) return;
+    const through = data && data.sourceThrough > 0 ? data.sourceThrough : null;
+    if (through === null) {
+      // 没有这一项就别硬编一个时间出来（老缓存 / 将来换口径）
+      line.hidden = true;
+      line.textContent = '';
+      return;
+    }
+    const when = axisClock(through, ymdKey(through) === ymdKey(Date.now()) ? 'time' : 'date');
+    const ago = relativeTime(Date.now() - through);
+    const base = fromCache ? t('freshCached', { t: when, ago }) : t('freshThrough', { t: when, ago });
+    line.hidden = false;
+    line.textContent = localStale ? `${t('freshStale')}${base}` : base;
+    line.classList.toggle('stale', Boolean(localStale));
   }
 
   function render() {
     if (!payload) return;
     el('chartBody').hidden = false;
+    // 已经有图了（含「先拿本地缓存渲染」这条路径）：按钮该是「刷新图表」而不是「加载图表」，
+    // doLoad 只在真正取回数据后才改按钮，缓存渲染走不到那里
+    el('chartLoadText').textContent = t('refresh');
     renderSummary(payload);
+    renderFreshness(payload);
     drawChart(payload);
     renderLegend();
     renderMoods(payload);
@@ -658,11 +714,18 @@
       return;
     }
     el('chartHint').textContent = t('hint');
-    if (!payload) el('chartLoadText').textContent = t('load');
+    // 有图就用「刷新图表」：这条在切语言时也要跟着本地化（缓存首帧那次由 render() 补）
+    el('chartLoadText').textContent = payload ? t('refresh') : t('load');
     renderNote();
-    setCursor(null); // 读数行文案也要跟着语言切
+    // 读数行只在**语言真的变了**时重置：页面每 60 秒轮询都会重走一遍 setSite→applyStatic，
+    // 每次都清的话，用户正按着看图时读数会被弹回提示语（重绘那一路由 drawChart 自己收起）
+    if (renderedLang !== lang) {
+      renderedLang = lang;
+      setCursor(null);
+    }
     if (payload) {
       renderSummary(payload);
+      renderFreshness(payload);
       renderLegend();
       renderMoods(payload);
     }
@@ -742,6 +805,11 @@
 
   // 图表加载 / 首屏缓存渲染之前就把事件挂上：几何数据在 drawChart 里刷新
   bindPointer(el('chartSvg'));
+
+  // 「5 分钟前」得自己会走：页面停留久了也要如实变旧（纯本地计算，不发请求）
+  setInterval(() => {
+    if (payload) renderFreshness(payload);
+  }, 60 * 1000);
 
   window.RSChart = { setSite, setLang };
 })();

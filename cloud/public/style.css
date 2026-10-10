@@ -422,6 +422,17 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+/* 数据新鲜度一行（「数据截至 20:20（5 分钟前）」）：
+   次要信息，用 dim 色；云端导出掉队（>45 分钟没重建）时转暖橙，与页脚那套陈旧提示同色 */
+.chart-freshness {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-freshness.stale { color: var(--off); }
+
 .chart-svg {
   display: block;
   width: 100%;
@@ -522,6 +533,7 @@ h1 {
   .chart { margin-top: 0; padding: 18px; }
   .chart-svg { height: 180px; }
   .chart-summary { font-size: 14px; }
+  .chart-freshness { font-size: 13px; }
   .chart-readout { font-size: 13px; }
   .mood-timeline li { font-size: 14px; }
 }

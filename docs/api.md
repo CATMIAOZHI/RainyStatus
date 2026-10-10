@@ -15,7 +15,7 @@
 | 请求体 | `Content-Type: application/json`，body ≤ 4096 字节 |
 | 错误体 | 统一 `{ "ok": false, "error": { "code": "...", "message": "..." } }` |
 | CORS | **不发任何 CORS 头**（网页与 API 同源部署）。浏览器跨域调用会被浏览器侧拦截 |
-| 缓存 | **回给浏览器的一律 `Cache-Control: no-store`**。`/api/status` 另有 30 秒**机房内**缓存（只省 KV 读，见该节） |
+| 缓存 | **Worker 回给浏览器的一律 `Cache-Control: no-store`**。`/api/status` 另有 30 秒**机房内**缓存（只省 KV 读，见该节）；可选的**静态数据域**不走 Worker，缓存策略见「静态数据域」一节 |
 
 ---
 
@@ -93,6 +93,7 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 | `site.customText` | 部署者自定义的状态徽章文案（`STATUS_TEXT_*`），未配置的字段为 `null`。**非 null 时前端固定用它、不跟语言切换**；描述文字已去换行、控制字符与零宽字符（BOM/ZWSP）按空格处理，并按码点截断到 40 |
 | `site.avatarUrl` | 头像图片（`AVATAR_URL`）；`null` = 用 `site.avatar` 的 emoji 字符。只接受站内路径 `/x.png`、`https://` 外链、`data:image/*;base64,…`（长度 ≤ 4096），其余一律按未配置处理；前端在图片加载失败时也会退回 emoji |
 | `site.history` | 历史图表能力（`HISTORY_*` 解析结果）。`enabled=false` 时网页隐藏图表卡；`siteKey` 只在 `challenge="turnstile"` 时下发 |
+| `site.dataBaseUrl` | 静态数据域基址（`DATA_*` 启用时下发）；`null` = 数据走 `/api/status`。前端读不到静态文件时自动回退 |
 | `site` | 站点展示配置，由 Worker 的 `vars` 下发，前端据此渲染（不硬编码个人信息） |
 
 **展示开关是服务端过滤，不是前端隐藏**：`SHOW_TEMPERATURE` / `SHOW_NETWORK` 关闭时，`device.temperatureC` / `device.network` 在响应里就是 `null`；`SHOW_MOOD` 关闭时 `mood` 整体为 `null`。直接 `curl` 也拿不到——否则这个开关只是「看起来关了」。
@@ -106,6 +107,22 @@ Worker 自身存活探针。**不需要鉴权，不碰 KV**（0 额度消耗）�
 - 这层缓存**不省 Worker 请求次数**（缓存命中照样算 1 次请求），只省 KV 读。
 
 > **不提供 `stale` 字段**：KV 读缓存固定 30 秒，对 30 分钟阈值可忽略，加了反而自相矛盾。
+
+---
+
+## 静态数据域（可选，默认关闭）
+
+给人多 / 被打的场景准备：把**同一份** `/api/status` 公开载荷写成 R2 对象 `status.json`，挂在**独立域**（如 `data.example.com`）上直出。这条路**完全不经过 Worker**——静态文件的读取既不消耗 Worker 10 万请求/天，也不消耗 KV 读。
+
+- **数据同源**：与 `/api/status` 由同一个函数组装（`cloud/src/lib/status-payload.ts`），字段一致（多一层恒真 `ok:true`）。`SHOW_TEMPERATURE` / `SHOW_NETWORK` / `SHOW_MOOD` 在这一层**服务端过滤**——静态文件里没有的字段，`curl` 也拿不到。
+- **启用条件**：三者缺一不可——`DATA_ENABLED=true`、绑定了 `DATA_BUCKET`（R2）、`DATA_BASE_URL` 是合法 https 地址。任一缺失按「未启用」处理：`site.dataBaseUrl` 下发 `null`，前端照旧走 `/api/status`。
+- **前端行为**：优先读 `{dataBaseUrl}/status.json`，失败（含被熔断）**静默回退** `/api/status`；HTML 里的 `<meta name="rainystatus-data-base" content="https://data.…">` 优先级更高（两种配法任选其一）。
+- **发布**：心跳成功后刷新一份，Cron 每轮兜底（负责把「已掉线」翻转过去）。KV 读失败**跳过本轮、绝不覆盖上一版**——宁可数据旧，也不能把故障写成空数据永久留在桶里。
+- **时效**：对象头带 `public, max-age=60`，但**生效 TTL 以部署侧 Cache Rule 为准**（建议：整域 Eligible for cache + Edge TTL 忽略源站 60s + 浏览器 TTL 60s），否则会被站点默认 Browser Cache TTL 放大成几小时。
+- **熔断**（R2 官方没有「用完停」）：`GUARD_*` 巡检读 R2 用量，超阈值（默认月 600 万 / 小时 200 万次）自动**停用自定义域 + 关闭 r2.dev**，只允许人工复位。
+- **边界**：该域只承载 `status.json` 一份公开数据；`/api/history` **不搬**——档位白名单与 Turnstile 只存在于 Worker 运行时，静态化等于绕过它们。
+
+> 完整攻击面、额度数学与开启/关闭操作清单见 `docs/security-and-quotas.md`。
 
 ---
 

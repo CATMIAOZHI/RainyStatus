@@ -8,6 +8,7 @@
 
 import { nextExpectedMs } from '../config';
 import { recordHeartbeatHistory } from '../jobs/history';
+import { publishStatusFile } from '../jobs/status-file';
 import { isAuthorized } from '../lib/auth';
 import { writeDeviceStatus } from '../lib/kv';
 import { jsonError, jsonOk, methodNotAllowed } from '../lib/response';
@@ -72,6 +73,14 @@ export async function handleHeartbeat(request: Request, env: Env, ctx: Execution
       }),
     );
   }
+
+  // 静态数据域：心跳成功后顺手刷新一份 status.json，让页面在缓存 TTL 内就能看到
+  // 新数值，不必等下一次 cron。放在历史写入之后（历史更重、也更不重要）。
+  ctx.waitUntil(
+    publishStatusFile(env, now).catch(() => {
+      // 静态数据只是加速手段：失败就等下一轮 cron 兜底
+    }),
+  );
 
   return jsonOk({
     receivedAt: now,

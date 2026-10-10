@@ -103,8 +103,78 @@ export function avatarImageUrl(value: string | undefined): string | null {
   return /^https:\/\/\S+$/i.test(v) ? v : null;
 }
 
+/** 数据域地址长度上限。它只是个域名，不是拿来放长串参数的 */
+const MAX_DATA_BASE_URL = 200;
+
+/**
+ * 数据域基址规范化：只收 https、去尾斜杠、拒带凭据的地址。
+ *
+ * 为什么只收 https：状态页本身是 https，`http://` 的数据域会被浏览器当**混合内容**
+ * 直接拦掉——配了也是白配，不如按未配置处理（前端会老老实实走 Worker 接口）。
+ * `https://user:pass@host` 这种带凭据的地址同样拒绝：它会把秘密写进页面。
+ */
+export function normalizeBaseUrl(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const v = value.trim().replace(/\/+$/, '');
+  if (v === '' || v.length > MAX_DATA_BASE_URL) return null;
+  if (v.includes('@')) return null;
+  return /^https:\/\/[^\s/]+(\/[^\s]*)?$/i.test(v) ? v : null;
+}
+
+/**
+ * 静态数据域（可选，默认关闭）。
+ *
+ * 做什么：把 `/api/status` 的公开响应体写成 R2 上的 `status.json`，由**独立域**
+ * （`data.example.com`）直出。这条路不经过 Worker —— 静态文件的读取既不消耗
+ * Worker 10 万请求/天，也不消耗 KV 读，前面还能套 CDN 缓存。
+ *
+ * 三个条件**全部**满足才算启用：`DATA_ENABLED=true`、绑定了 `DATA_BUCKET`、
+ * `DATA_BASE_URL` 合法。缺一个就当没配——半开状态最危险：发布了文件却没人用，
+ * 或者前端去请求一个不存在的域。
+ */
+export function dataConfig(env: Env): { enabled: boolean; baseUrl: string | null } {
+  const baseUrl = normalizeBaseUrl(env.DATA_BASE_URL);
+  const enabled = bool(env.DATA_ENABLED, false) && env.DATA_BUCKET !== undefined && baseUrl !== null;
+  return { enabled, baseUrl };
+}
+
+/**
+ * 配额熔断配置（可选，默认关闭）。
+ *
+ * 为什么必须有：R2 是计费产品，官方**没有**「免费用完自动停」的开关（只有预算提醒）。
+ * 攻击者只要让请求绕过 CDN 缓存，账单就随请求数线性上涨；实测把每月 1000 万次
+ * 免费额度打穿只需约 4 次/秒跑一个月。所以「超限自动拉闸」只能自己实现。
+ *
+ * 阈值默认取免费额度的 60%（月 600 万）与一个滚动小时上限（200 万）：
+ * 慢速攻击在免费额度内就会被拉闸（账单 $0），突发攻击也能在一小时内兜住。
+ */
+export function guardConfig(env: Env): {
+  enabled: boolean;
+  token: string;
+  account: string;
+  bucket: string;
+  hostname: string;
+  maxMonthly: number;
+  maxHourly: number;
+} {
+  const token = env.CF_GUARD_TOKEN?.trim() ?? '';
+  const account = env.GUARD_ACCOUNT_ID?.trim() ?? '';
+  const bucket = env.GUARD_BUCKET_NAME?.trim() ?? '';
+  const hostname = env.GUARD_HOSTNAME?.trim() ?? '';
+  return {
+    enabled: bool(env.GUARD_ENABLED, false) && token !== '' && account !== '' && bucket !== '' && hostname !== '',
+    token,
+    account,
+    bucket,
+    hostname,
+    maxMonthly: num(env.GUARD_MAX_MONTHLY, 6_000_000),
+    maxHourly: num(env.GUARD_MAX_HOURLY, 2_000_000),
+  };
+}
+
 /** 站点公开配置：由 /api/status 下发，网页据此渲染，无需硬编码 */
 export function siteConfig(env: Env): SiteConfig {
+  const data = dataConfig(env);
   return {
     title: str(env.SITE_TITLE, 'RainyStatus'),
     owner: str(env.OWNER_NAME, 'RainyStatus'),
@@ -123,6 +193,9 @@ export function siteConfig(env: Env): SiteConfig {
       noData: custom(env.STATUS_TEXT_NO_DATA),
     },
     history: historyCapability(env),
+    // 只有真正能发布（开关 + 绑定 + 地址都对）才告诉前端数据域在哪，
+    // 否则前端会去请求一个必然 404 的地址，白等一轮超时
+    dataBaseUrl: data.enabled ? data.baseUrl : null,
   };
 }
 

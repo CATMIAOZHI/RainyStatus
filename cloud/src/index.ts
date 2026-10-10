@@ -13,7 +13,9 @@
 // 好处：免费额度耗尽（错误码 1027）时网页仍能打开，只有 API 报错。
 
 import { historyConfig, siteConfig } from './config';
+import { runQuotaGuard } from './jobs/guard';
 import { runHistoryMaintenance } from './jobs/history';
+import { publishStatusFile } from './jobs/status-file';
 import { handleHealth } from './routes/health';
 import { handleHeartbeat } from './routes/heartbeat';
 import { handleHistory } from './routes/history';
@@ -75,16 +77,39 @@ export default {
   /**
    * 定时任务（wrangler.jsonc 的 triggers.crons）。
    *
-   * 只做两件事：把当前窗口的图表数据预生成成 JSON、清理过期数据。
+   * 三件事，**互不拖累**（每步各自 try/catch）：发布静态数据文件、把当前窗口的
+   * 图表数据预生成成 JSON 并清理过期数据、配额熔断巡检。
    * **聚合不在这里**——它跟着心跳走，避免「原始数据已清理但还没汇总」的窗口。
+   *
+   * 顺序有讲究：先发静态文件（最便宜、页面最需要），再干重活（D1），最后才是
+   * 熔断（要打外部 API，最慢）。任何一步失败都不该让后面的事不跑。
    */
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    const config = historyConfig(env);
-    // 即使一个档位都没公开，也要跑：清理必须继续，否则原始数据会无限增长
-    if (!config.enabled && !config.collect) return;
+    const now = Date.now();
 
-    // mood 是否进导出跟着站点的公开配置走：服务端决定，不能只靠前端隐藏
-    const includeMood = siteConfig(env).showMood;
-    await runHistoryMaintenance(env, Date.now(), config.ranges, includeMood);
+    try {
+      // 兜底发布：心跳每次成功也会发一份，这一份负责「设备掉线后把 online 翻转过去」
+      await publishStatusFile(env, now);
+    } catch {
+      // 静态数据只是加速手段，失败不影响下面的主链路
+    }
+
+    const config = historyConfig(env);
+    // 即使一个档位都没公开，采集开着也要跑：清理必须继续，否则原始数据会无限增长
+    if (config.enabled || config.collect) {
+      try {
+        // mood 是否进导出跟着站点的公开配置走：服务端决定，不能只靠前端隐藏
+        await runHistoryMaintenance(env, now, config.ranges, siteConfig(env).showMood);
+      } catch {
+        // 单轮维护失败不改变任何公开状态，下一轮重建窗口就好
+      }
+    }
+
+    try {
+      // 配额熔断：超限就把数据域停掉（R2 没有「用完停」，只能自己拉闸）
+      await runQuotaGuard(env, now);
+    } catch {
+      // 熔断巡检失败绝不能影响心跳与导出
+    }
   },
 } satisfies ExportedHandler<Env>;

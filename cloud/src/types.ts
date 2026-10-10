@@ -53,6 +53,29 @@ export interface Env {
   TURNSTILE_SITE_KEY?: string;
   /** 要求人机验证；未设置时按「配了 TURNSTILE_SECRET 就要求」处理 */
   TURNSTILE_REQUIRED?: string;
+
+  /** ── 静态数据域（可选，默认关闭）：把 status.json 推给 R2，由独立域直出 ── */
+  /** `true` 才发布；还要同时绑定 DATA_BUCKET 且 DATA_BASE_URL 合法才真正生效 */
+  DATA_ENABLED?: string;
+  /** 数据域基址，例如 `https://data.example.com`（只收 https、无尾斜杠） */
+  DATA_BASE_URL?: string;
+  /** R2 绑定（wrangler.jsonc 的 r2_buckets）；没绑定就自动不发布 */
+  DATA_BUCKET?: R2Bucket;
+
+  /** ── 配额熔断（可选，默认关闭）：R2 没有「用完停」，超限只能自己拉闸 ── */
+  /** `true` 才启用巡检 */
+  GUARD_ENABLED?: string;
+  /** 月累计操作数阈值（默认 6_000_000，即免费额度 1000 万的 60%） */
+  GUARD_MAX_MONTHLY?: string;
+  /** 滚动 1 小时操作数阈值（默认 2_000_000） */
+  GUARD_MAX_HOURLY?: string;
+  /** 超限时要停用的数据域主机名（如 data.example.com） */
+  GUARD_HOSTNAME?: string;
+  /** 账号 id 与桶名（停域 API 需要） */
+  GUARD_ACCOUNT_ID?: string;
+  GUARD_BUCKET_NAME?: string;
+  /** Cloudflare API token：Account Analytics Read + Workers R2 Storage Write（wrangler secret put CF_GUARD_TOKEN） */
+  CF_GUARD_TOKEN?: string;
 }
 
 /** KV: device_status */
@@ -120,6 +143,13 @@ export interface SiteConfig {
   customText: StatusCustomText;
   /** 历史图表能力：前端据此决定显示「加载图表」按钮还是直接隐藏 */
   history: HistoryCapability;
+  /**
+   * 静态数据域基址（启用 DATA_* 时下发）；null = 数据走 `/api/status`。
+   *
+   * 前端在页面里找不到 `<meta name="rainystatus-data-base">` 时就用它，
+   * 这样部署者只要配好 vars 就能让网页直读静态数据，不必再改 HTML。
+   */
+  dataBaseUrl: string | null;
 }
 
 /**

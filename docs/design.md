@@ -428,3 +428,4 @@ RainyStatus/
 | D5 | 是否允许提交现有骨架 | 需维护者确认 |
 | D6 | 是否上架 Google Play | 自用分发则 `specialUse` 零顾虑；上架需 FGS 声明 + 演示视频 |
 | D7 | 模式 B（单实例多设备）是否要做 | v1 不做；要做需升 Workers Paid |
+| D8 | 状态数据是否搬到 R2 静态域（T1） | 实现已就绪、**默认关闭**；开启需维护者授权，且缓存规则 + WAF + 熔断三件套缺一不可（`docs/security-and-quotas.md`） |

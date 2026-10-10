@@ -10,6 +10,35 @@ const LANG_STORAGE_KEY = 'rainystatus.lang';
 /** 上一次成功读到的状态：接口挂了（含额度耗尽）时用它兜底，而不是显示「从未上报」 */
 const STATUS_CACHE_KEY = 'rainystatus.status';
 const MAX_STATUS_CACHE_BYTES = 32 * 1024;
+/**
+ * 静态数据域（可选）：读 `https://data.…` 上的 `status.json`，那条路**不经过 Worker**，
+ * 也就吃不到「10 万请求/天」的额度。两个来源：
+ *   1. 页面里写了 `<meta name="rainystatus-data-base" content="https://data.…">` —— 立刻生效；
+ *   2. 接口下发的 `site.dataBaseUrl` —— 部署者只配 vars 就能用，第一次仍会打到 Worker，
+ *      之后就直读静态文件（存在 localStorage 里，下次访问直接用）。
+ * 两条路的数据由同一个函数生成，字段完全一致。
+ */
+const DATA_BASE_META = document.querySelector('meta[name="rainystatus-data-base"]')?.content?.trim() || null;
+const DATA_BASE_KEY = 'rainystatus.dataBase';
+
+function dataBase() {
+  if (DATA_BASE_META) return DATA_BASE_META;
+  try {
+    return localStorage.getItem(DATA_BASE_KEY);
+  } catch {
+    return null; // 隐私模式下存储不可用：那就照旧走 Worker 接口
+  }
+}
+
+/** 记住接口下发的数据域（或它被关掉时清掉），下次访问就能直读静态文件 */
+function syncDataBase(fromApi) {
+  try {
+    if (fromApi) localStorage.setItem(DATA_BASE_KEY, fromApi);
+    else localStorage.removeItem(DATA_BASE_KEY);
+  } catch {
+    // 存不下就算了：只是每次都多打一次 Worker 接口
+  }
+}
 
 const I18N = {
   'zh-Hans': {
@@ -484,14 +513,38 @@ function render(data) {
   }
 }
 
+/**
+ * 取一份状态数据。
+ *
+ * 优先走静态数据域：它是给「人多」准备的——每个访客都打一次 Worker 的话，
+ * 免费额度 10 万请求/天很快见底；静态文件的读取免费不限量。
+ * 那边**故意不加** `cache:'no-store'`：浏览器按响应头缓存 60 秒是对的，
+ * 省下来的正是 Worker 请求。它挂了（含被熔断）就静默回退到 Worker 接口。
+ */
+async function fetchStatus() {
+  const base = dataBase();
+  if (base) {
+    try {
+      const res = await fetch(`${base}/status.json`);
+      if (res.ok) return await res.json();
+    } catch {
+      // 静态域不可用：继续往下走 Worker 接口
+    }
+  }
+  // cache: 'no-store'：刷新页面必须真的去问服务端。
+  // 响应头我们已经发 no-store，但 Cloudflare 站点级的 Browser Cache TTL 会在
+  // 命中缓存时把它改写成几小时（默认 4 小时）—— 这里显式绕过，双保险。
+  const res = await fetch('/api/status', { cache: 'no-store', headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  // 接口是「数据域配置」的唯一权威：配了就记下来（下次直读静态），关了也清掉
+  syncDataBase(data?.site?.dataBaseUrl ?? null);
+  return data;
+}
+
 async function load() {
   try {
-    // cache: 'no-store'：刷新页面必须真的去问服务端。
-    // 响应头我们已经发 no-store，但 Cloudflare 站点级的 Browser Cache TTL 会在
-    // 命中缓存时把它改写成几小时（默认 4 小时）—— 这里显式绕过，双保险。
-    const res = await fetch('/api/status', { cache: 'no-store', headers: { accept: 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await fetchStatus();
     render(data);
     rendered = true;
     writeStatusCache(data);

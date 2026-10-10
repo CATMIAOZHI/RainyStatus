@@ -90,6 +90,38 @@
   //   "crons": ["*/15 * * * *"]
   // }
 
+  // ── 静态数据域（可选，默认关闭）：人多时把「读」搬出 Worker ──
+  // 背景：`/api/status` 每个访客都要打一次 Worker，免费额度 10 万请求/天；
+  // 而 R2 + 独立域 + CDN 缓存的读取**不经过 Worker**，免费且不限量。
+  // 想开启（顺序不能反）：
+  //   1. 控制台开通 R2（计费产品，可能需要绑定支付方式）
+  //   2. 建桶并把自定义域接上，例如 data.example.com；**关闭 r2.dev 开发域**（它不走缓存规则与 WAF）
+  //   3. ⚠️ **必须**加缓存规则：整域匹配 + 缓存所有内容 + Edge TTL 60s
+  //      + 浏览器 TTL 60s（否则该 zone 的默认 Browser Cache TTL 会改写成几小时）
+  //   4. 加 WAF 规则：只放行 `status.json` 这条路径、拦非 GET/HEAD 与带查询串的请求
+  //      （免费版的 Cache Key 不支持「忽略查询串」，随机 `?x=` 会绕过缓存直打 R2）
+  //   5. 开 Smart Tiered Cache，否则「每个边缘机房各自回源」也会把免费额度打穿
+  //   6. vars 里补 "DATA_ENABLED": "true" 与 "DATA_BASE_URL": "https://data.example.com"，
+  //      并启用下面的 r2_buckets 绑定；页面里可选加
+  //      `<meta name="rainystatus-data-base" content="https://data.example.com">`
+  // 详见 docs/security-and-quotas.md（开启清单 / 攻击面 / 熔断）与 docs/api.md 的「静态数据域」。
+  //
+  // "r2_buckets": [
+  //   { "binding": "DATA_BUCKET", "bucket_name": "rainystatus-data" }
+  // ],
+  //
+  // ── 配额熔断（可选，默认关闭）：R2 没有「用完停」，超限自动停用数据域（自定义域 + r2.dev）──
+  // 需要一个新的 API token（Account Analytics:Read + Workers R2 Storage:Write）：
+  //   npx wrangler secret put CF_GUARD_TOKEN
+  // 再把下面这些填上（GUARD_ACCOUNT_ID 是你的 Cloudflare 账号 id）：
+  //
+  // "GUARD_ENABLED": "true",
+  // "GUARD_MAX_MONTHLY": "6000000",   // 免费额度 1000 万/月的 60%
+  // "GUARD_MAX_HOURLY": "2000000",
+  // "GUARD_ACCOUNT_ID": "<账号 id>",
+  // "GUARD_BUCKET_NAME": "rainystatus-data",
+  // "GUARD_HOSTNAME": "data.example.com"
+
   // ── 绑定自有域名（可选）──
   // 前提：该域名所在 zone 在本账号且 active，且该主机名没有已存在的 CNAME。
   // Cloudflare 会自动创建 DNS 记录并签发证书（可能等 1–2 分钟）。

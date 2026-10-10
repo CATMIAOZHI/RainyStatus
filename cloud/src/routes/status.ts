@@ -16,11 +16,12 @@
 // 5. **KV 异常返回 503，不再伪装成「没有数据」**：以前返回 200 + 空数据会让网页
 //    显示「从未上报」，还会把本地缓存里的旧数据清掉——把「服务故障」说成「设备没上报」，
 //    这是最不该有的误导。
+// 6. 载荷由 `lib/status-payload.ts` 统一组装：静态数据域 `status.json` 用的是
+//    **同一个函数**，否则字段与过滤口径迟早分叉（详见那里的注释）。
 
-import { offlineThresholdMs, siteConfig } from '../config';
-import { readBoth } from '../lib/kv';
+import { buildStatusPayload } from '../lib/status-payload';
 import { jsonError, jsonOk, methodNotAllowed } from '../lib/response';
-import { SCHEMA_VERSION, type DeviceStatus, type Env, type SiteConfig } from '../types';
+import type { Env } from '../types';
 
 /** 机房内缓存时长（秒）。KV 自身的 cacheTtl 是 30 秒，两者对齐即可。
  *  **只写在缓存副本上**：回给浏览器的响应永远是 no-store（见文件头第 4 条）。 */
@@ -31,25 +32,6 @@ const CACHE_TTL_SECONDS = 30;
  * 缓存就等于没有——这也是「参数能控制的东西不能当缓存键」的一般规则。
  */
 const CACHE_KEY = 'https://rainystatus.invalid/api/status';
-
-/**
- * 只暴露允许公开的字段。
- *
- * `SHOW_TEMPERATURE` / `SHOW_NETWORK` 必须是**服务端**的过滤：只在前端隐藏元素，
- * 任何人直接 curl 这个接口还是能拿到温度与网络 —— 那是隐私开关的假象。
- */
-function publicDevice(device: DeviceStatus, site: SiteConfig) {
-  return {
-    batteryPercent: device.batteryPercent ?? null,
-    charging: device.charging ?? null,
-    chargeSource: device.chargeSource ?? null,
-    temperatureC: site.showTemperature ? device.temperatureC ?? null : null,
-    network: site.showNetwork ? device.network ?? null : null,
-    deviceName: device.deviceName ?? null,
-    appVersion: device.appVersion ?? null,
-    clientTs: device.clientTs ?? null,
-  };
-}
 
 function isHead(request: Request): boolean {
   return request.method === 'HEAD';
@@ -92,42 +74,15 @@ export async function handleStatus(request: Request, env: Env, ctx: ExecutionCon
     }
   }
 
-  const now = Date.now();
-  const site = siteConfig(env);
-  const threshold = offlineThresholdMs(env);
-
-  let device: DeviceStatus | null;
-  let mood: Awaited<ReturnType<typeof readBoth>>['mood'];
-  try {
-    const both = await readBoth(env.STATUS_KV);
-    device = both.device;
-    mood = both.mood;
-  } catch {
+  // 载荷与静态数据域共用同一份实现（lib/status-payload.ts）
+  const payload = await buildStatusPayload(env, Date.now());
+  if (payload === null) {
     // 读不到就是读不到：明确告诉前端「服务暂时不可用」，让它保留上一次的数据。
     // 503 不写缓存，避免把故障状态在机房内粘住 30 秒。
     return respond(jsonError(503, 'upstream_unavailable', 'Status storage is temporarily unavailable'));
   }
 
-  const lastSeenAt = device?.lastSeenAt ?? null;
-  const offlineForMs = lastSeenAt === null ? null : Math.max(0, now - lastSeenAt);
-  const online = offlineForMs !== null && offlineForMs <= threshold;
-
-  const response = jsonOk({
-    schemaVersion: SCHEMA_VERSION,
-    generatedAt: now,
-    online,
-    offlineThresholdMs: threshold,
-    lastSeenAt,
-    offlineForMs,
-    device: device === null ? null : publicDevice(device, site),
-    // SHOW_MOOD 关闭时连心情本身都不下发，而不是让前端藏起来
-    mood:
-      mood === null || !site.showMood
-        ? null
-        : { text: mood.text, emoji: mood.emoji ?? null, updatedAt: mood.updatedAt },
-    // 站点配置（标题/主人名/头像/展示开关/历史能力）由服务端下发
-    site,
-  });
+  const response = jsonOk(payload);
 
   // 只缓存成功响应：503/5xx 一律不缓存（上面已经提前返回）。
   // 存进机房缓存的是一份**副本**，只有它带 max-age；回给浏览器的响应保持

@@ -169,6 +169,12 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 
 > 这些值在 Deploy to Cloudflare 的配置页里也能直接改。
 
+### 云端 · 静态数据域（可选，**默认关闭**）
+
+给人多 / 被打的场景：把状态数据写成 R2 上的 `status.json`，挂在独立域（如 `data.example.com`）上由 CDN 直出，**读取完全不经过 Worker**（静态文件读取免费不限量；Worker 免费只有 10 万请求/天）。网页优先读它、读不到自动回退 `/api/status`。
+
+注意 R2 是计费产品（免费额度内一般够用，超额会产生账单），且官方**没有「用完停」**——所以本仓库自带超限熔断（`GUARD_*` 自动停自定义域 + 关 r2.dev，只能人工复位）。开启步骤见 `cloud/wrangler.jsonc` 里的「静态数据域」注释；攻击面、额度数字与操作清单见 [`docs/security-and-quotas.md`](docs/security-and-quotas.md)。
+
 ---
 
 ### App · 本机历史：电量 + 心情（**均默认开**）

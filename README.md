@@ -148,6 +148,8 @@ RainyStatus（雨晴Status）— Live battery & heartbeat status page · the Rai
 
 不配置就**完全没有**历史接口，也不会记录任何历史——别人部署时不会不小心公开自己的作息。
 
+网页上的图表**默认不加载**：点「加载图表」并过一次人机验证后才画（原因见 `docs/security-and-quotas.md`）。画出来之后可以**按住图表**（桌面端也可以直接把鼠标停在上面）看某个时刻的数据——图上会出现一条竖线，下面一行给出那一刻的时间、电量与充电状态，抬手即收起。X 轴的时间刻度按可用宽度自适应（手机竖屏 3 个、宽屏 4 个，跨度跨天时带日期），窄屏上不会挤成一团。
+
 要开就三步（详细见 `cloud/wrangler.jsonc` 末尾注释）：
 
 1. `npx wrangler d1 create rainystatus-history`，把输出的 `database_id` 填进 `d1_databases`（binding 必须是 `HISTORY_DB`）；

@@ -37,6 +37,9 @@
       refresh: '刷新图表',
       moodsTitle: '这段时间的心情',
       blockedTurnstile: '图表还没开起来：这个站点要求人机验证，但还没配 Turnstile 密钥。部署者需要配置 TURNSTILE_SITE_KEY 与 TURNSTILE_SECRET 后重新部署。',
+      readoutHint: '按住图表可查看该时刻的数据',
+      charging: '充电中',
+      notCharging: '未充电',
       noValue: '—',
     },
     'zh-Hant': {
@@ -58,6 +61,9 @@
       refresh: '重新整理圖表',
       moodsTitle: '這段時間的心情',
       blockedTurnstile: '圖表還沒開起來：這個站點要求人機驗證，但還沒設定 Turnstile 金鑰。部署者需要設定 TURNSTILE_SITE_KEY 與 TURNSTILE_SECRET 後重新部署。',
+      readoutHint: '按住圖表可查看該時刻的資料',
+      charging: '充電中',
+      notCharging: '未充電',
       noValue: '—',
     },
     en: {
@@ -80,6 +86,9 @@
       moodsTitle: 'Mood in this window',
       blockedTurnstile:
         'The chart is not enabled yet: this site requires human verification but has no Turnstile keys. The owner needs to set TURNSTILE_SITE_KEY and TURNSTILE_SECRET, then redeploy.',
+      readoutHint: 'Press and hold the chart to read that moment',
+      charging: 'Charging',
+      notCharging: 'Not charging',
       noValue: '—',
     },
   };
@@ -99,6 +108,10 @@
   let localStale = 0;
   /** 非 null = 站点配置不完整（服务端给了原因），此时只显示说明、不给按钮 */
   let blockedReason = null;
+  /** 当前图的几何 + 「有值」的点；重绘（含窗口 resize）后整体刷新，旧坐标一律失效 */
+  let geom = null;
+  /** 指针是否正按在图表上：触摸时靠它区分「按住跟随」与「悬停跟随」 */
+  let pressing = false;
 
   function t(key, vars) {
     let text = (I18N[lang] || I18N['zh-Hans'])[key] || I18N['zh-Hans'][key] || key;
@@ -120,12 +133,68 @@
     const pad = (n) => String(n).padStart(2, '0');
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
-
+  /** 完整时间（`YYYY-MM-DD HH:MM`）；时区规则与 axisClock 一致，别再用 `Date` 的本地读数 */
   function clockFull(ms) {
-    const d = new Date(ms);
+    const p = timeParts(ms);
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${p.y}-${pad(p.mo)}-${pad(p.d)} ${pad(p.h)}:${pad(p.mi)}`;
   }
+
+  // ── X 轴刻度用的小工具 ──
+  /** 时间部件：与 app.js 的 formatClock 同一套时区规则（固定偏移优先，否则用访客本地时区） */
+  function timeParts(ms) {
+    const offset = site ? site.timezoneOffsetMinutes : null;
+    const fixed = typeof offset === 'number' && Number.isFinite(offset);
+    const d = new Date(fixed ? ms + offset * 60000 : ms);
+    return fixed
+      ? {
+          y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(),
+          h: d.getUTCHours(), mi: d.getUTCMinutes(),
+        }
+      : {
+          y: d.getFullYear(), mo: d.getMonth() + 1, d: d.getDate(),
+          h: d.getHours(), mi: d.getMinutes(),
+        };
+  }
+
+  /**
+   * 刻度文案。手机竖屏只有 ~300px 可用宽，`2026-10-10 12:46` 这种完整时间要 80px，
+   * 四个并排必叠字，所以：
+   *   - 同一自然日 → 只给 `HH:MM`
+   *   - 跨天 → `MM-DD HH:MM`
+   *   - 跨年（理论上 24h 视图不会出现）→ `YYYY-MM-DD HH:MM`：只给日期的话，
+   *     窗口两端的标签会变成两条一模一样的 `2026-01-01`，等于白画
+   */
+  function axisClock(ms, mode) {
+    const p = timeParts(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    const hhmm = `${pad(p.h)}:${pad(p.mi)}`;
+    if (mode === 'time') return hhmm;
+    if (mode === 'year') return `${p.y}-${pad(p.mo)}-${pad(p.d)} ${hhmm}`;
+    return `${pad(p.mo)}-${pad(p.d)} ${hhmm}`;
+  }
+
+  function ymdKey(ms) {
+    const p = timeParts(ms);
+    return `${p.y}-${p.mo}-${p.d}`;
+  }
+
+  /** 文字宽度估算（9px 字号）：只用来判定「放不放得下」，保守一点没坏处 */
+  function estimateTextWidth(text, fontSize) {
+    let units = 0;
+    for (const ch of text) units += /[0-9A-Za-z:.\-+ ]/.test(ch) ? 0.56 : 1;
+    return units * fontSize;
+  }
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function svgNode(tag, attrs, text) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, String(v));
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
 
   // ── 本地缓存：让「被打了 / 断网」时还能看到上一次的数据 ──
   function readCache() {
@@ -173,11 +242,8 @@
     const x = (ms) => padL + ((ms - from) / span) * plotW;
     const y = (pct) => padT + (1 - Math.max(0, Math.min(100, pct)) / 100) * plotH;
 
-    const ns = 'http://www.w3.org/2000/svg';
     const add = (tag, attrs, text) => {
-      const node = document.createElementNS(ns, tag);
-      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
-      if (text !== undefined) node.textContent = text;
+      const node = svgNode(tag, attrs, text);
       svg.appendChild(node);
       return node;
     };
@@ -188,18 +254,35 @@
       add('text', { x: padL - 5, y: y(pct) + 3, class: 'chart-axis', 'text-anchor': 'end' }, `${pct}`);
     }
 
-    // X 轴刻度：起点 / 1/3 / 2/3 / 终点
-    for (const ratio of [0, 1 / 3, 2 / 3, 1]) {
+    // X 轴刻度：**按可用宽度自适应**。
+    // 以前固定画 0 / ⅓ / ⅔ / 1 四个「完整时间」，手机竖屏（绘图区只有 ~300px）
+    // 四个 ~80px 的标签必然叠在一起；现在：先按跨度决定格式，再挑一个放得下的数量
+    // （竖屏最多 3 个，宽屏最多 4 个，太窄就只留首尾两个）。
+    const axisMode = ymdKey(from) === ymdKey(to) ? 'time' : timeParts(from).y === timeParts(to).y ? 'date' : 'year';
+    // 估宽只算文字本身，间距另算：两端锚点是 start / end、中间是 middle，
+    // 所以「相邻两个刻度」真正要占的是 1.5 倍文字宽，而不是 1 倍
+    // （按 1 倍判定的话，跨年那种 16 字符的标签在窄屏上会叠字）。
+    const textWidth = estimateTextWidth(axisClock(from, axisMode), 9);
+    const maxTicks = width >= 480 ? 4 : 3;
+    const fits = (n) => (n === 2 ? plotW >= 2 * textWidth + 6 : plotW / (n - 1) >= 1.5 * textWidth + 6);
+    let tickCount = 2;
+    for (let n = 2; n <= maxTicks; n += 1) {
+      if (fits(n)) tickCount = n;
+    }
+    for (let i = 0; i < tickCount; i += 1) {
+      const ratio = i / (tickCount - 1);
       const ms = from + span * ratio;
+      const isFirst = i === 0;
+      const isLast = i === tickCount - 1;
       add(
         'text',
         {
           x: Math.min(width - padR, Math.max(padL, x(ms))),
           y: height - 5,
           class: 'chart-axis',
-          'text-anchor': ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle',
+          'text-anchor': isFirst ? 'start' : isLast ? 'end' : 'middle',
         },
-        clock(ms),
+        axisClock(ms, axisMode),
       );
     }
 
@@ -271,6 +354,111 @@
         `${last.p}%`,
       );
     }
+
+    // 命中层：一张透明的整幅矩形。SVG 默认只在「画过东西的地方」命中，
+    // 曲线之间的空白按下去本来没有任何反应，加它之后整块绘图区都能接指针事件。
+    add('rect', { x: 0, y: 0, width, height, class: 'chart-hit' });
+    // 按住/悬停指示器（默认隐藏，见 setCursor）
+    const cursor = add('g', { class: 'chart-cursor' });
+    cursor.appendChild(svgNode('line', { class: 'chart-cursor-line', x1: 0, y1: padT, x2: 0, y2: padT + plotH }));
+    cursor.appendChild(svgNode('circle', { class: 'chart-cursor-dot', cx: 0, cy: 0, r: 3.5 }));
+
+    geom = { x, y, points: withValue, width, padT, plotH };
+    setCursor(null);
+  }
+
+  // ── 按住查看某时刻数据（与 App 图表对齐：按住/悬停 → 读数，抬手收起）──
+  function readoutHint() {
+    return t('readoutHint');
+  }
+
+  function chargeText(charging) {
+    if (charging === 1) return t('charging');
+    if (charging === 0) return t('notCharging');
+    return '';
+  }
+
+  /** point = null → 收起指示器，读数行回到提示文案 */
+  function setCursor(point) {
+    const svg = el('chartSvg');
+    const readout = el('chartReadout');
+    const cursor = svg ? svg.querySelector('.chart-cursor') : null;
+
+    if (!point || !geom || !cursor) {
+      if (cursor) cursor.classList.remove('on');
+      if (readout) readout.textContent = readoutHint();
+      return;
+    }
+
+    const cx = geom.x(point.t);
+    const cy = geom.y(point.p);
+    const line = cursor.querySelector('.chart-cursor-line');
+    line.setAttribute('x1', String(cx));
+    line.setAttribute('x2', String(cx));
+    const dot = cursor.querySelector('.chart-cursor-dot');
+    dot.setAttribute('cx', String(cx));
+    dot.setAttribute('cy', String(cy));
+    cursor.classList.add('on');
+
+    if (readout) {
+      const parts = [clock(point.t), `${point.p}%`];
+      const charge = chargeText(point.c);
+      if (charge) parts.push(charge); // 充电状态未知时不留一个孤零零的分隔符
+      readout.textContent = parts.join(' · ');
+    }
+  }
+
+  /** 屏幕横坐标 → 图上最近的一个「有值」点 */
+  function nearestPoint(clientX) {
+    const svg = el('chartSvg');
+    if (!svg || !geom || geom.points.length === 0) return null;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width) return null;
+    const vx = ((clientX - rect.left) / rect.width) * geom.width;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const p of geom.points) {
+      const distance = Math.abs(geom.x(p.t) - vx);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  function bindPointer(svg) {
+    if (!svg || svg.dataset.rsCursor === '1') return;
+    svg.dataset.rsCursor = '1';
+
+    svg.addEventListener('pointerdown', (event) => {
+      pressing = true;
+      // 捕获指针：手指移出图表、或抬在图外时，pointerup 仍回到这里。
+      // 不捕获的话「按住 → 拖出图外 → 抬手」会让 pressing 永远停在 true，
+      // 之后指针离开图表也不再收起读数（合成事件没有真指针，捕获失败可忽略）。
+      try {
+        svg.setPointerCapture(event.pointerId);
+      } catch {
+        /* 没有真实指针（脚本派发）时忽略 */
+      }
+      setCursor(nearestPoint(event.clientX));
+    });
+    svg.addEventListener('pointermove', (event) => {
+      // 触摸：按住期间跟随手指；鼠标：悬停即跟随（桌面习惯）
+      if (pressing || event.pointerType === 'mouse') setCursor(nearestPoint(event.clientX));
+    });
+    const release = () => {
+      pressing = false;
+      setCursor(null);
+    };
+    svg.addEventListener('pointerup', release);
+    svg.addEventListener('pointercancel', release); // 页面开始滚动时浏览器会撤掉指针
+    // 兜底：抬起发生在图表之外（没被捕获到）也要复位，别把读数钉死在屏幕上
+    document.addEventListener('pointerup', release);
+    document.addEventListener('pointercancel', release);
+    svg.addEventListener('pointerleave', () => {
+      if (!pressing) setCursor(null);
+    });
   }
 
   function renderSummary(data) {
@@ -472,6 +660,7 @@
     el('chartHint').textContent = t('hint');
     if (!payload) el('chartLoadText').textContent = t('load');
     renderNote();
+    setCursor(null); // 读数行文案也要跟着语言切
     if (payload) {
       renderSummary(payload);
       renderLegend();
@@ -547,8 +736,12 @@
   }
 
   window.addEventListener('resize', () => {
-    if (payload) drawChart(payload);
+    // 隐藏时 svg 的 clientWidth 是 0，重绘会退回 320 兜底宽度且之后不再纠正
+    if (payload && !el('chartSection').hidden) drawChart(payload);
   });
+
+  // 图表加载 / 首屏缓存渲染之前就把事件挂上：几何数据在 drawChart 里刷新
+  bindPointer(el('chartSvg'));
 
   window.RSChart = { setSite, setLang };
 })();

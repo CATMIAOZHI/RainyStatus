@@ -98,7 +98,9 @@
   //   2. 建桶并把自定义域接上，例如 data.example.com；**关闭 r2.dev 开发域**（它不走缓存规则与 WAF）
   //   3. ⚠️ **必须**加缓存规则：整域匹配 + 缓存所有内容 + Edge TTL 60s
   //      + 浏览器 TTL 60s（否则该 zone 的默认 Browser Cache TTL 会改写成几小时）
-  //   4. 加 WAF 规则：只放行 `status.json` 这条路径、拦非 GET/HEAD 与带查询串的请求
+  //   4. 加 WAF 规则：只放行 `status.json` 这条路径、拦非 GET/HEAD 与带查询串的请求；
+  //      路径用 `raw.http.request.uri.path` 原样精确匹配（防 `//`、`/./`、`%2E` 归一化变体绕过），
+  //      加 `Origin` 白名单（防 `Vary: Origin` 导致每个新值各占缓存条目、重复回源）
   //      （免费版的 Cache Key 不支持「忽略查询串」，随机 `?x=` 会绕过缓存直打 R2）
   //   5. 开 Smart Tiered Cache，否则「每个边缘机房各自回源」也会把免费额度打穿
   //   6. vars 里补 "DATA_ENABLED": "true" 与 "DATA_BASE_URL": "https://data.example.com"，
